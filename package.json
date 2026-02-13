@@ -1,6 +1,8 @@
 {
   "name": "ytdl",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "description": "Multi-platform video and music downloader",
+  "author": "Your Name",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,23 +19,13 @@
       "output": "dist"
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        },
         {
           "target": "portable",
           "arch": ["x64"]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Video Downloader"
     },
     "files": [
       "**/*",

@@ -1,8 +1,8 @@
-# 🎬 Video Downloader
+# 🎬 MediaDl
 
-A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites — built with Electron and yt-dlp.
+A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -10,7 +10,7 @@ A free, open-source Windows desktop app to download videos and music from YouTub
 
 ## 📥 Download
 
-👉 **[Click here to download the latest release](../../releases/latest)**
+👉 **[Click here to download the latest release](https://github.com/kevclint/MediaDl/releases/latest)**
 
 > No installation needed — just download and run the `.exe` directly!
 
@@ -40,25 +40,17 @@ A free, open-source Windows desktop app to download videos and music from YouTub
 | Twitter / X | ✅ | ✅ |
 | 1000+ more | ✅ | ✅ |
 
-> Full list of supported sites: [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
+> Full list: [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
 
 ---
 
-## 🖥️ Screenshots
-
-> Coming soon!
-
----
-
-## 🛠️ Run From Source
-
-Want to build it yourself? Follow these steps:
+## 🛠️ Build From Source
 
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/YOURUSERNAME/video-downloader.git
-cd video-downloader
+git clone https://github.com/kevclint/MediaDl.git
+cd MediaDl
 ```
 
 ### 2. Install dependencies
@@ -69,17 +61,17 @@ npm install
 
 ### 3. Download required tools
 
-You need to manually download these two files and place them inside the `tools/` folder:
+Download these two files and place them inside the `tools/` folder:
 
 | File | Download | Size |
 |------|----------|------|
-| `yt-dlp.exe` | [⬇️ Download yt-dlp.exe](https://github.com/yt-dlp/yt-dlp/releases/download/2026.02.04/yt-dlp.exe) | ~9 MB |
-| `ffmpeg.exe` | [⬇️ Download ffmpeg.exe](https://sourceforge.net/projects/tumagcc/files/converters/ffmpeg.exe/download) | ~112 MB |
+| `yt-dlp.exe` | [⬇️ Download](https://github.com/yt-dlp/yt-dlp/releases/download/2026.02.04/yt-dlp.exe) | ~9 MB |
+| `ffmpeg.exe` | [⬇️ Download](https://sourceforge.net/projects/tumagcc/files/converters/ffmpeg.exe/download) | ~112 MB |
 
-After downloading, your folder should look like this:
+Your `tools/` folder should look like this:
 
 ```
-video-downloader/
+MediaDl/
 └── tools/
     ├── yt-dlp.exe   ✅
     └── ffmpeg.exe   ✅
@@ -104,53 +96,20 @@ Your `.exe` will appear in the `dist/` folder.
 
 ## 📦 Built With
 
-| Tool | Purpose |
-|------|---------|
-| [Electron](https://electronjs.org) | Desktop app framework |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Video downloading engine |
-| [FFmpeg](https://ffmpeg.org) | Audio/video conversion |
-| HTML + CSS + JS | UI |
+- [Electron](https://electronjs.org) — Desktop app framework
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — Video downloading engine
+- [FFmpeg](https://ffmpeg.org) — Audio/video conversion
 
 ---
 
 ## ⚠️ Legal Notice
 
-This tool is intended for **personal use only**.
-
-- Only download content **you have permission to download**
-- Respect **copyright laws** in your country
-- YouTube's Terms of Service **prohibit downloading** unless a download button is provided
-- The developers are **not responsible** for how this tool is used
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! If you want to add features or fix bugs:
-
-1. Fork this repo
-2. Create a new branch: `git checkout -b feature/my-new-feature`
-3. Make your changes
-4. Commit: `git commit -m "Add my new feature"`
-5. Push: `git push origin feature/my-new-feature`
-6. Open a **Pull Request**
-
----
-
-## 📋 Changelog
-
-### [1.0.0] - 2026-02-13
-- 🎉 Initial release
-- YouTube, TikTok, Facebook support
-- MP4 and MP3 download
-- Resolution selection up to 4K
-- Multi-URL download queue
-- Live progress bars
+This tool is intended for **personal use only**. Only download content you have permission to download. Respect copyright laws in your country.
 
 ---
 
 ## ⭐ Support
 
-If you find this app useful, please consider giving it a **star** on GitHub! It helps others discover the project.
+If you find this useful, give it a **star** on GitHub! It helps others discover the project. 🙏
 
-[![Star on GitHub](https://img.shields.io/github/stars/YOURUSERNAME/video-downloader?style=social)](../../stargazers)
+[![Star on GitHub](https://img.shields.io/github/stars/kevclint/MediaDl?style=social)](https://github.com/kevclint/MediaDl/stargazers)

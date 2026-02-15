@@ -1,37 +1,50 @@
-# 🎬 MediaDl
+# 🎬 MediaDl 
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-6366f1)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
-a GUI of ytdlp and ffmpeg so you can easily download videos and music from the internet
-
-
-<img width="935" height="689" alt="Screenshot 2026-02-15 114647" src="https://github.com/user-attachments/assets/1c1c0ce0-091f-4fab-9770-933b3bf3a5c5" />
-<img width="940" height="690" alt="Screenshot 2026-02-15 114635" src="https://github.com/user-attachments/assets/6a45a85a-41b3-4c5b-93f6-35085eab3e70" />
-
+**MediaDl** is a high-performance, open-source Windows desktop application built for speed and simplicity. It provides a premium, "Linear-style" GUI for `yt-dlp` and `FFmpeg`, allowing you to download and process media from **YouTube, TikTok, Facebook, and 1000+ other sites** with a single click.
 
 ---
 
 ## 📥 Download
 
-👉 **[Click here to download the latest release](https://github.com/kevclint/MediaDl/releases/latest)**
+👉 **[Click here to download the latest v2.0.0 release](https://github.com/kevclint/MediaDl/releases/latest)**
 
-> No installation needed — just download and run the `.exe` directly!
+> **Portable & Lightweight:** No installation required. Just download the `.exe` and run it instantly.
 
 ---
 
 ## ✨ Features
 
-- 🎬 Download videos as **MP4**
-- 🎵 Download audio as **MP3**
-- 📺 Choose resolution: **144p, 360p, 480p, 720p, 1080p, 4K**
-- 🔗 Paste **multiple URLs** at once
-- 📋 **Download queue** — add as many videos as you want
-- 📊 **Live progress bar** with file size and status
-- 📁 Choose your own **download folder**
-- 🌙 Clean modern **dark UI**
+### 🚀 Powerful Downloading
+- **4K Support:** Download in the highest quality available (144p up to 4K).
+- **Smart Queue:** Add unlimited URLs and manage them in a clean, organized list.
+- **Batch Processing:** Paste multiple links at once to save time.
+- **Live Metrics:** Real-time tracking of file size, download speed, and ETA using monospaced fonts for zero UI jitter.
+
+### 🛠️ New: Media Tools (FFmpeg Powered)
+- **Format Converter:** Seamlessly switch between MP4, MP3, MKV, and AVI.
+- **Audio Extraction:** One-click high-fidelity "Video to MP3" conversion.
+- **Drag & Drop:** Drop local files directly into the app to start processing instantly.
+- **Success Cards:** Professional result cards with "Open Folder" and "Play" shortcuts.
+
+### 🎨 Pro UI/UX Overhaul
+- **Modern Sidebar:** Clean navigation between Home, Downloads, Tools, and Settings.
+- **Responsive Scaling:** Content remains centered and professional even in fullscreen mode.
+- **Command Bar:** A focused, high-end URL input area with integrated "Paste" logic.
+- **8px Design System:** Perfectly balanced spacing, typography, and visual hierarchy.
+
+---
+
+## 📸 Screenshots
+
+  <img width="942" alt="Dashboard View" src="https://github.com/user-attachments/assets/626490c8-2c48-45d0-ab05-66a02833be58" />
+  <img width="943" alt="Download Queue" src="https://github.com/user-attachments/assets/b09d8c12-1dfa-447b-be05-a37a5dc0fc8d" />
+  <img width="942" alt="Media Tools" src="https://github.com/user-attachments/assets/cfac6a06-5235-4b13-9afa-52a60655692c" />
+  <img width="942" alt="Settings" src="https://github.com/user-attachments/assets/4d43331a-18d5-45cb-8d95-183979f69d4b" />
+
 
 ---
 

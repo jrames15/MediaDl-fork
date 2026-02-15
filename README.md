@@ -5,6 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
+a GUI of ytdlp and ffmpeg so you can easily download videos and music from the internet
 
 
 <img width="935" height="689" alt="Screenshot 2026-02-15 114647" src="https://github.com/user-attachments/assets/1c1c0ce0-091f-4fab-9770-933b3bf3a5c5" />

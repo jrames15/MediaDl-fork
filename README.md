@@ -1,10 +1,15 @@
 # 🎬 MediaDl
 
-A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
-
 ![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
+
+
+
+<img width="1918" height="1146" alt="Screenshot 2026-02-15 105744" src="https://github.com/user-attachments/assets/97f3e6dc-67fc-438f-8d91-593f110c848b" />
+<img width="1909" height="1136" alt="Screenshot 2026-02-15 105846" src="https://github.com/user-attachments/assets/6e4447b4-6d7a-4eea-8307-28b2d113a0e7" />
 
 ---
 

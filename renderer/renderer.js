@@ -10,7 +10,6 @@ const RUNNING_STATUSES = new Set(['fetching', 'downloading', 'processing']);
 
 const cardRefs = new Map();
 const cancelRequested = new Set();
-const DEBUG_TEST_URL = 'https://www.youtube.com/watch?v=jNQXAC9IVRw';
 
 const urlInput = document.getElementById('url-input');
 const commandBar = document.getElementById('command-bar');
@@ -614,16 +613,6 @@ document.getElementById('btn-paste').onclick = async () => {
     showToast('Could not read clipboard', 'error');
   }
 };
-
-const debugLinkBtn = document.getElementById('btn-debug-link');
-if (debugLinkBtn) {
-  debugLinkBtn.addEventListener('click', async () => {
-    urlInput.value = DEBUG_TEST_URL;
-    updateCommandBarClearVisibility();
-    clearUrlError();
-    await analyzeUrl(DEBUG_TEST_URL);
-  });
-}
 
 async function playCompletedJob(job) {
   if (!job || !job.outputFolder) return;

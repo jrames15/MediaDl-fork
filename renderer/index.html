@@ -2,98 +2,335 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" 
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MediaDl</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
-  <!-- Custom Title Bar -->
+  <!-- Custom Title Bar (draggable; buttons are clickable via -webkit-app-region: no-drag) -->
   <div class="title-bar">
     <div class="title-bar-left">
-      <span class="app-icon">⬇</span>
+      <img src="../assets/icon.ico" class="app-logo" alt="" aria-hidden="true" />
       <span class="app-name">MediaDl</span>
     </div>
     <div class="title-bar-buttons">
-      <button id="btn-min">─</button>
-      <button id="btn-max">□</button>
-      <button id="btn-close" class="close-btn">✕</button>
+      <button id="btn-min" type="button" aria-label="Minimize">─</button>
+      <button id="btn-max" type="button" aria-label="Maximize">□</button>
+      <button id="btn-close" type="button" class="close-btn" aria-label="Close">✕</button>
     </div>
   </div>
 
-  <div class="layout">
+  <div class="app-layout">
+    <!-- Sidebar: 64px, SVG icons -->
+    <nav class="sidebar" aria-label="Main navigation">
+      <button type="button" class="sidebar-nav-item active" data-view="home" aria-label="Home" title="Home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-view="downloads" aria-label="Downloads" title="Downloads">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-view="settings" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
+      <button type="button" class="sidebar-nav-item" data-view="tools" aria-label="Media Tools" title="Media Tools">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+          <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" />
+        </svg>
+      </button>
+      <div class="sidebar-about" aria-label="About">
+        <p class="sidebar-about-line">
+          Made with love
+          <span class="sidebar-about-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 21s-6.2-4.35-8.4-7.2A5.5 5.5 0 0 1 12 6.2a5.5 5.5 0 0 1 8.4 7.6C18.2 16.65 12 21 12 21z" />
+            </svg>
+          </span>
+          by Kevclint
+        </p>
+      </div>
+    </nav>
 
-    <!-- LEFT PANEL: Controls -->
-    <div class="left-panel">
-
-      <div class="field-group">
-        <label>Paste URLs <span class="muted">(one per line)</span></label>
-        <textarea id="url-input"
-          placeholder="https://youtube.com/watch?v=...&#10;https://tiktok.com/...&#10;https://facebook.com/..."
-          rows="6"></textarea>
+    <!-- Main content -->
+    <main class="main-content">
+      <!-- View: Home (command bar + queue) -->
+      <div class="view" id="view-home">
+        <section class="command-section">
+          <div class="content-wrap">
+          <div class="command-bar-wrapper">
+            <div class="command-bar-container">
+              <div class="command-bar" id="command-bar">
+                <button type="button" id="btn-paste" class="command-bar-paste" aria-label="Paste from clipboard" title="Paste">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <div class="command-bar-input-wrap">
+                  <input type="text"
+                         id="url-input"
+                         class="command-bar-input"
+                         placeholder="Paste video link here (YouTube, TikTok, etc...)"
+                         autocomplete="off" />
+                  <button type="button" id="btn-clear" class="command-bar-clear" aria-label="Clear input" title="Clear" hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <button type="button" id="btn-add" class="command-bar-action">Add to Queue</button>
+              </div>
+            </div>
+            <p class="command-bar-error" id="url-error" role="alert" hidden></p>
+          </div>
+          <div class="options-row">
+            <div class="field-group">
+              <label>Format</label>
+              <div class="toggle-group">
+                <label class="toggle-opt">
+                  <input type="radio" name="fmt" value="mp4" checked />
+                  <span>MP4 Video</span>
+                </label>
+                <label class="toggle-opt">
+                  <input type="radio" name="fmt" value="mp3" />
+                  <span>MP3 Audio</span>
+                </label>
+              </div>
+            </div>
+            <div class="field-group" id="res-group">
+              <label for="res-select">Resolution</label>
+              <select id="res-select">
+                <option value="2160">4K (2160p)</option>
+                <option value="1080">1080p Full HD</option>
+                <option value="720" selected>720p HD</option>
+                <option value="480">480p</option>
+                <option value="360">360p</option>
+                <option value="144">144p</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>Save to</label>
+              <div class="folder-row">
+                <input type="text" id="folder-display" placeholder="No folder selected" readonly />
+                <button type="button" id="btn-browse" class="btn-secondary">Browse</button>
+              </div>
+            </div>
+          </div>
+          </div>
+        </section>
+        <section class="queue-section">
+          <div class="content-wrap">
+            <div class="queue-header">
+              <h2>Download Queue</h2>
+              <div class="queue-actions">
+                <button type="button" id="btn-start-all" class="btn-primary small">Start All</button>
+                <button type="button" id="btn-clear" class="btn-secondary">Clear Done</button>
+              </div>
+            </div>
+            <div id="queue">
+              <div class="empty-state" id="empty-state">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  </svg>
+                </div>
+                <p>No downloads yet</p>
+                <p class="empty-prompt">Paste a link to get started.</p>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div class="field-group">
-        <label>Format</label>
-        <div class="toggle-group">
-          <label class="toggle-opt">
-            <input type="radio" name="fmt" value="mp4" checked />
-            <span>🎬 MP4 Video</span>
-          </label>
-          <label class="toggle-opt">
-            <input type="radio" name="fmt" value="mp3" />
-            <span>🎵 MP3 Audio</span>
-          </label>
-        </div>
+      <!-- View: Downloads (manager) -->
+      <div class="view view-hidden" id="view-downloads">
+        <section class="manager-section">
+          <div class="content-wrap">
+            <div class="manager-header">
+              <h2 class="manager-title">Downloads</h2>
+              <p class="manager-subtitle">Review completed files and manage your download history.</p>
+            </div>
+            <div id="downloads-list" class="downloads-list"></div>
+            <div class="manager-empty" id="downloads-empty">
+              <div class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <p>No downloads yet</p>
+              <p class="muted">Paste a link to get started.</p>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div class="field-group" id="res-group">
-        <label>Resolution</label>
-        <select id="res-select">
-          <option value="2160">4K (2160p)</option>
-          <option value="1080">1080p Full HD</option>
-          <option value="720" selected>720p HD</option>
-          <option value="480">480p</option>
-          <option value="360">360p</option>
-          <option value="144">144p</option>
-        </select>
-        <small>Best available quality at or below selected resolution</small>
+      <!-- View: Settings -->
+      <div class="view view-hidden" id="view-settings">
+        <section class="settings-section">
+          <div class="content-wrap">
+            <div class="settings-header">
+              <h2 class="settings-title">Settings</h2>
+              <p class="settings-subtitle">Manage defaults, storage, and update tools.</p>
+            </div>
+            <form class="settings-form" id="settings-form">
+              <div class="settings-grid">
+                <div class="settings-card">
+                  <h3 class="settings-card-title">Storage</h3>
+                  <p class="settings-card-subtitle">Choose where downloaded files are saved.</p>
+                  <div class="settings-row">
+                    <label>Download Location</label>
+                    <div class="folder-row">
+                      <input type="text" id="settings-folder" placeholder="No folder selected" readonly />
+                      <button type="button" id="btn-settings-browse" class="btn-secondary">Browse</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="settings-card">
+                  <h3 class="settings-card-title">Defaults</h3>
+                  <p class="settings-card-subtitle">Set default quality and format for new downloads.</p>
+                  <div class="settings-row">
+                    <label for="settings-default-quality">Default Quality</label>
+                    <select id="settings-default-quality">
+                      <option value="2160">4K (2160p)</option>
+                      <option value="1080">1080p Full HD</option>
+                      <option value="720" selected>720p HD</option>
+                    </select>
+                  </div>
+                  <div class="settings-row">
+                    <label for="settings-default-format">Default Format</label>
+                    <select id="settings-default-format">
+                      <option value="mp4" selected>MP4</option>
+                      <option value="mp3">MP3</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="settings-card settings-card-wide">
+                  <h3 class="settings-card-title">Updates</h3>
+                  <p class="settings-card-subtitle">Keep your downloader engine current.</p>
+                  <div class="settings-version-row">
+                    <span class="settings-version-label">App version</span>
+                    <span class="settings-version-value" id="app-version">Loading...</span>
+                  </div>
+                  <div class="settings-version-row">
+                    <span class="settings-version-label">yt-dlp version</span>
+                    <span class="settings-version-value" id="ytdlp-version">Loading...</span>
+                  </div>
+                  <div class="settings-row">
+                    <button type="button" id="btn-update-ytdlp" class="btn-secondary">Update yt-dlp</button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
       </div>
 
-      <div class="field-group">
-        <label>Save To</label>
-        <div class="folder-row">
-          <input type="text" id="folder-display" placeholder="No folder selected..." readonly />
-          <button id="btn-browse" class="btn-secondary">Browse</button>
-        </div>
+      <!-- View: Media Tools -->
+      <div class="view view-hidden" id="view-tools">
+        <section class="tools-section">
+          <div class="content-wrap">
+            <div class="tools-header">
+              <h2 class="tools-title">Media Tools</h2>
+              <p class="tools-subtitle">Convert, compress, and extract audio from local media files.</p>
+            </div>
+            <div class="tools-empty-state" id="tools-empty-state">
+              <div class="tools-drop-zone tools-drop-zone-hero" id="tools-drop-zone" role="button" tabindex="0">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+                    <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" />
+                  </svg>
+                </div>
+                <p>Drop a file or click to browse</p>
+                <p class="empty-prompt">Paste a link to get started.</p>
+              </div>
+            </div>
+            <div class="tools-grid" id="tools-grid" hidden>
+              <div class="tools-column-drop">
+                <div class="tools-drop-zone tools-drop-zone-compact" id="tools-drop-zone-grid" role="button" tabindex="0">
+                  <span class="tools-drop-zone-text">Drop file here or Click to Browse</span>
+                </div>
+                <p class="tools-selected-file muted" id="tools-selected-file">No file selected</p>
+              </div>
+              <div class="tools-column-settings">
+                <div class="tools-cards">
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Convert</h3>
+                    <div class="tool-card-row">
+                      <label for="tools-format">Format</label>
+                      <select id="tools-format">
+                        <option value="mp4">MP4</option>
+                        <option value="mp3">MP3</option>
+                        <option value="mov">MOV</option>
+                        <option value="avi">AVI</option>
+                      </select>
+                      <button type="button" id="btn-tools-convert" class="btn-primary small">Convert</button>
+                    </div>
+                  </div>
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Compress</h3>
+                    <div class="tool-card-row tool-card-toggle-row">
+                      <label>Quality</label>
+                      <div class="toggle-group">
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="small" />
+                          <span>Small</span>
+                        </label>
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="medium" checked />
+                          <span>Medium</span>
+                        </label>
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="high" />
+                          <span>High</span>
+                        </label>
+                      </div>
+                      <button type="button" id="btn-tools-compress" class="btn-primary small">Compress</button>
+                    </div>
+                  </div>
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Extract Audio</h3>
+                    <div class="tool-card-row">
+                      <button type="button" id="btn-tools-extract" class="btn-primary small">Convert to MP3</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tools-status" id="tools-status" hidden>
+              <div class="tools-status-bar" id="tools-status-bar">
+                <div class="tools-status-label">Processing...</div>
+                <div class="tools-status-percent" id="tools-status-percent">0%</div>
+                <div class="progress-track tools-status-track">
+                  <div class="progress-fill" id="tools-progress-fill" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+            <div id="tools-success-container"></div>
+          </div>
+        </section>
       </div>
-
-      <button id="btn-add" class="btn-primary">+ Add to Queue</button>
-
-    </div>
-
-    <!-- RIGHT PANEL: Queue -->
-    <div class="right-panel">
-
-      <div class="queue-header">
-        <h2>Download Queue</h2>
-        <div class="queue-actions">
-          <button id="btn-start-all" class="btn-primary small">▶ Start All</button>
-          <button id="btn-clear" class="btn-secondary small">✕ Clear Done</button>
-        </div>
-      </div>
-
-      <div id="queue">
-        <div class="empty-state" id="empty-state">
-          <div class="empty-icon">📥</div>
-          <p>No downloads yet</p>
-          <p class="muted">Paste a URL and click Add to Queue</p>
-        </div>
-      </div>
-
-    </div>
+    </main>
   </div>
+
+  <!-- Toast container (fixed bottom center) -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
   <script src="renderer.js"></script>
 </body>

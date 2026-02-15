@@ -12,6 +12,9 @@ const cardRefs = new Map();
 const cancelRequested = new Set();
 
 const urlInput = document.getElementById('url-input');
+const commandBar = document.getElementById('command-bar');
+const btnClear = document.getElementById('btn-clear');
+const urlErrorEl = document.getElementById('url-error');
 const folderDisplay = document.getElementById('folder-display');
 const resGroup = document.getElementById('res-group');
 const resSelect = document.getElementById('res-select');
@@ -48,6 +51,53 @@ function createNode(tag, className, text) {
   return element;
 }
 
+/** Returns inline SVG string for a given hostname (site icon). */
+function getSiteIconSvg(hostname) {
+  if (!hostname) return getSiteIconSvg('default');
+  const h = hostname.toLowerCase();
+  if (h.includes('youtube') || h.includes('youtu.be')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+  }
+  if (h.includes('tiktok')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>';
+  }
+  if (h.includes('facebook') || h.includes('fb.')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+}
+
+function setUrlError(message) {
+  if (commandBar) commandBar.classList.add('has-error');
+  if (urlErrorEl) {
+    urlErrorEl.textContent = message;
+    urlErrorEl.hidden = false;
+  }
+}
+
+function clearUrlError() {
+  if (commandBar) commandBar.classList.remove('has-error');
+  if (urlErrorEl) {
+    urlErrorEl.textContent = '';
+    urlErrorEl.hidden = true;
+  }
+}
+
+/** Show a toast notification (e.g. "Task Completed"). */
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = createNode('div', `toast ${type}`);
+  toast.setAttribute('role', 'status');
+  toast.textContent = message;
+  container.appendChild(toast);
+  const duration = 3500;
+  setTimeout(() => {
+    toast.style.animation = 'toast-in 0.2s ease reverse forwards';
+    setTimeout(() => toast.remove(), 200);
+  }, duration);
+}
+
 function normalizedPercent(value) {
   const safe = Number(value);
   if (!Number.isFinite(safe)) return 0;
@@ -63,6 +113,7 @@ function stateForStorage(job) {
     format: job.format,
     resolution: job.resolution,
     outputFolder: job.outputFolder,
+    outputFilePath: job.outputFilePath || '',
     status: job.status,
     percent: normalizedPercent(job.percent),
     fileSize: job.fileSize || '',
@@ -90,6 +141,15 @@ async function restoreState() {
     downloadFolder = savedFolder;
     folderDisplay.value = savedFolder;
   }
+  const settings = await window.electronAPI.getSettings();
+  if (settings.defaultQuality) {
+    resSelect.value = settings.defaultQuality;
+  }
+  if (settings.defaultFormat) {
+    const radio = document.querySelector(`input[name="fmt"][value="${settings.defaultFormat}"]`);
+    if (radio) radio.checked = true;
+    resGroup.hidden = settings.defaultFormat === 'mp3';
+  }
 
   const raw = localStorage.getItem(STATE_STORAGE_KEY);
   if (!raw) return;
@@ -112,6 +172,7 @@ async function restoreState() {
         format: item.format,
         resolution: item.format === 'mp4' ? String(item.resolution || '720') : null,
         outputFolder: item.outputFolder,
+        outputFilePath: item.outputFilePath || '',
         status: wasRunning ? 'queued' : (item.status || 'queued'),
         percent: wasRunning ? 0 : normalizedPercent(item.percent),
         fileSize: wasRunning ? '' : (item.fileSize || ''),
@@ -133,6 +194,379 @@ document.getElementById('btn-min').onclick = () => window.electronAPI.minimizeWi
 document.getElementById('btn-max').onclick = () => window.electronAPI.maximizeWindow();
 document.getElementById('btn-close').onclick = () => window.electronAPI.closeWindow();
 
+function updateCommandBarClearVisibility() {
+  if (btnClear) btnClear.hidden = !urlInput.value.trim();
+}
+
+urlInput.addEventListener('input', () => {
+  clearUrlError();
+  updateCommandBarClearVisibility();
+});
+urlInput.addEventListener('focus', () => clearUrlError());
+
+// ── Sidebar view switching (fade-in + slide-up 300ms) ──
+const VIEW_IDS = ['view-home', 'view-downloads', 'view-settings', 'view-tools'];
+function switchView(viewId) {
+  VIEW_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === viewId) {
+      el.classList.remove('view-hidden');
+      el.classList.add('view-visible');
+    } else {
+      el.classList.remove('view-visible');
+      el.classList.add('view-hidden');
+    }
+  });
+  document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
+    const v = btn.getAttribute('data-view');
+    const targetId = 'view-' + v;
+    btn.classList.toggle('active', targetId === viewId);
+  });
+  if (viewId === 'view-downloads') renderDownloadsManager();
+  if (viewId === 'view-settings') loadSettingsForm();
+  if (viewId === 'view-tools') syncToolsEmptyState();
+}
+
+document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const view = btn.getAttribute('data-view');
+    if (view) switchView('view-' + view);
+  });
+});
+
+// ── Media Tools ──
+let toolsSelectedPath = '';
+let toolsLastOutputPath = '';
+let toolsLastOutputName = '';
+let toolsLastOutputSize = '';
+
+const toolsEmptyState = document.getElementById('tools-empty-state');
+const toolsGrid = document.getElementById('tools-grid');
+const toolsDropZone = document.getElementById('tools-drop-zone');
+const toolsDropZoneGrid = document.getElementById('tools-drop-zone-grid');
+const toolsSelectedFileEl = document.getElementById('tools-selected-file');
+const toolsStatusEl = document.getElementById('tools-status');
+const toolsStatusBar = document.getElementById('tools-status-bar');
+const toolsStatusPercent = document.getElementById('tools-status-percent');
+const toolsProgressFill = document.getElementById('tools-progress-fill');
+const toolsSuccessContainer = document.getElementById('tools-success-container');
+
+function setToolsProcessing(processing) {
+  toolsSuccessContainer.innerHTML = '';
+  if (toolsStatusEl) toolsStatusEl.hidden = !processing;
+  if (processing) {
+    if (toolsStatusPercent) toolsStatusPercent.textContent = '0%';
+    if (toolsProgressFill) {
+      toolsProgressFill.style.width = '0%';
+      toolsProgressFill.classList.remove('completed');
+    }
+  }
+}
+
+function setToolsProgress(percent) {
+  const p = Math.min(100, Math.max(0, Number(percent) || 0));
+  if (toolsStatusPercent) toolsStatusPercent.textContent = p + '%';
+  if (toolsProgressFill) toolsProgressFill.style.width = p + '%';
+}
+
+function renderSuccessCard(outputPath, outputName, outputSize) {
+  toolsLastOutputPath = outputPath || '';
+  toolsLastOutputName = outputName || (outputPath ? outputPath.replace(/^.*[\\/]/, '') : '');
+  toolsLastOutputSize = outputSize || '—';
+  if (toolsStatusEl) toolsStatusEl.hidden = true;
+  toolsSuccessContainer.innerHTML = '';
+  const card = createNode('div', 'tools-success-card');
+  card.innerHTML = `
+    <div class="tools-success-icon" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="tools-success-meta">
+      <div class="name" title="${escapeAttr(toolsLastOutputName)}">${escapeHtml(toolsLastOutputName)}</div>
+      <div class="size">${escapeHtml(toolsLastOutputSize)}</div>
+    </div>
+    <div class="tools-success-actions">
+      <button type="button" class="btn-secondary btn-open-folder">📁 Open Folder</button>
+      <button type="button" class="btn-secondary btn-play">▶️ Play</button>
+      <button type="button" class="btn-secondary btn-convert-another">Convert Another</button>
+    </div>
+  `;
+  card.querySelector('.btn-open-folder').onclick = () => {
+    if (toolsLastOutputPath) window.electronAPI.showItemInFolder(toolsLastOutputPath);
+  };
+  card.querySelector('.btn-play').onclick = () => {
+    if (toolsLastOutputPath) window.electronAPI.playFile(toolsLastOutputPath);
+  };
+  card.querySelector('.btn-convert-another').onclick = () => {
+    toolsSuccessContainer.innerHTML = '';
+    toolsSelectedPath = '';
+    if (toolsSelectedFileEl) {
+      toolsSelectedFileEl.textContent = 'No file selected';
+      toolsSelectedFileEl.classList.add('muted');
+    }
+    syncToolsEmptyState();
+  };
+  toolsSuccessContainer.appendChild(card);
+  showToast('Task Completed', 'success');
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function setToolsComplete(outputPath, outputName, outputSize) {
+  if (toolsProgressFill) toolsProgressFill.classList.add('completed');
+  setToolsProgress(100);
+  renderSuccessCard(outputPath, outputName, outputSize);
+}
+
+window.electronAPI.onMediaToolsProgress((data) => {
+  setToolsProgress(data.percent);
+  if (data.percent >= 100 && data.outputPath) {
+    setToolsComplete(data.outputPath, data.outputName, data.outputSize);
+  }
+});
+
+function syncToolsEmptyState() {
+  const hasFile = !!toolsSelectedPath;
+  if (toolsEmptyState) toolsEmptyState.hidden = hasFile;
+  if (toolsGrid) toolsGrid.hidden = !hasFile;
+}
+
+function toolsPickFile() {
+  return window.electronAPI.selectMediaFile().then((path) => {
+    if (path) {
+      toolsSelectedPath = path;
+      const name = path.replace(/^.*[\\/]/, '');
+      if (toolsSelectedFileEl) {
+        toolsSelectedFileEl.textContent = name;
+        toolsSelectedFileEl.classList.remove('muted');
+      }
+      syncToolsEmptyState();
+    }
+  });
+}
+
+function bindToolsDropZone(el) {
+  if (!el) return;
+  el.addEventListener('click', () => void toolsPickFile());
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      void toolsPickFile();
+    }
+  });
+  el.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('drag-over');
+  });
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('drag-over');
+    handleToolsFileDrop(e.dataTransfer);
+  });
+}
+
+bindToolsDropZone(toolsDropZone);
+bindToolsDropZone(toolsDropZoneGrid);
+
+const MEDIA_DROP_EXT = /\.(mp4|mkv|mp3)$/i;
+function handleToolsFileDrop(dataTransfer) {
+  const file = dataTransfer.files && dataTransfer.files[0];
+  if (!file || !file.path || !MEDIA_DROP_EXT.test(file.name)) return;
+  toolsSelectedPath = file.path;
+  if (toolsSelectedFileEl) {
+    toolsSelectedFileEl.textContent = file.name;
+    toolsSelectedFileEl.classList.remove('muted');
+  }
+  syncToolsEmptyState();
+}
+
+// Universal drag & drop: when Media Tools view is active, accept file drop anywhere on window
+function isToolsViewActive() {
+  const view = document.getElementById('view-tools');
+  return view && !view.classList.contains('view-hidden');
+}
+function isHomeViewActive() {
+  const view = document.getElementById('view-home');
+  return view && !view.classList.contains('view-hidden');
+}
+
+document.body.addEventListener('dragover', (e) => {
+  if (isToolsViewActive() && e.dataTransfer.types.includes('Files')) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+  if (isHomeViewActive() && (e.dataTransfer.types.includes('text/uri-list') || e.dataTransfer.types.includes('text/plain'))) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'link';
+  }
+});
+
+document.body.addEventListener('drop', (e) => {
+  if (isToolsViewActive() && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleToolsFileDrop(e.dataTransfer);
+    return;
+  }
+  if (isHomeViewActive()) {
+    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    const trimmed = (url || '').trim();
+    if (!trimmed) return;
+    e.preventDefault();
+    e.stopPropagation();
+    urlInput.value = trimmed;
+    clearUrlError();
+    analyzeUrl(trimmed);
+  }
+});
+
+async function analyzeUrl(url) {
+  try {
+    await window.electronAPI.fetchFormats(url);
+    showToast('Ready to add to queue', 'success');
+  } catch (err) {
+    setUrlError(err && err.message ? err.message : 'Invalid URL. Only HTTP/HTTPS URLs are allowed.');
+  }
+}
+
+async function runTool(invoker, opts) {
+  if (!toolsSelectedPath) {
+    showToast('Select a file first (click drop zone or browse)', 'error');
+    return;
+  }
+  setToolsProcessing(true);
+  try {
+    const result = await invoker(opts);
+    if (result && result.success && result.outputPath) {
+      setToolsComplete(result.outputPath, result.outputName, result.outputSize);
+    }
+  } catch (err) {
+    setToolsProcessing(false);
+    showToast(err && err.message ? err.message : 'Processing failed', 'error');
+  }
+}
+
+document.getElementById('btn-tools-convert').addEventListener('click', () => {
+  const format = document.getElementById('tools-format').value;
+  runTool(window.electronAPI.mediaToolsConvert, { inputPath: toolsSelectedPath, format });
+});
+
+document.getElementById('btn-tools-compress').addEventListener('click', () => {
+  const quality = document.querySelector('input[name="tools-compress"]:checked').value;
+  runTool(window.electronAPI.mediaToolsCompress, { inputPath: toolsSelectedPath, quality });
+});
+
+document.getElementById('btn-tools-extract').addEventListener('click', () => {
+  runTool(window.electronAPI.mediaToolsExtractAudio, { inputPath: toolsSelectedPath });
+});
+
+
+// ── Downloads Manager ──
+const downloadsListEl = document.getElementById('downloads-list');
+const downloadsEmptyEl = document.getElementById('downloads-empty');
+
+function renderDownloadsManager() {
+  const completed = queue.filter((j) => j.status === 'completed');
+  downloadsListEl.innerHTML = '';
+  if (completed.length === 0) {
+    downloadsEmptyEl.hidden = false;
+    return;
+  }
+  downloadsEmptyEl.hidden = true;
+  completed.forEach((job) => {
+    const item = createNode('div', 'completed-item');
+    item.dataset.jobId = String(job.id);
+
+    let thumbEl;
+    if (job.thumbnailUrl) {
+      const img = document.createElement('img');
+      img.className = 'completed-item-thumb';
+      img.src = job.thumbnailUrl;
+      img.alt = '';
+      thumbEl = img;
+    } else {
+      const placeholder = createNode('div', 'completed-item-thumb-placeholder');
+      placeholder.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>';
+      thumbEl = placeholder;
+    }
+
+    const info = createNode('div', 'completed-item-info');
+    const title = createNode('div', 'completed-item-title', job.title || 'Unknown');
+    info.appendChild(title);
+
+    const actions = createNode('div', 'completed-item-actions');
+    const btnOpen = createNode('button', 'btn-secondary', 'Open Folder');
+    const btnPlay = createNode('button', 'btn-secondary', 'Play Video');
+    const btnRemove = createNode('button', 'btn-secondary', 'Remove');
+    btnOpen.type = btnPlay.type = btnRemove.type = 'button';
+    btnOpen.onclick = () => window.electronAPI.openFolder(job.outputFolder);
+    btnPlay.onclick = () => {
+      if (job.outputFilePath) {
+        window.electronAPI.playFile(job.outputFilePath);
+      } else {
+        window.electronAPI.openFolder(job.outputFolder);
+      }
+    };
+    btnRemove.onclick = () => removeCompletedFromList(job.id);
+    actions.appendChild(btnOpen);
+    actions.appendChild(btnPlay);
+    actions.appendChild(btnRemove);
+
+    item.appendChild(thumbEl);
+    item.appendChild(info);
+    item.appendChild(actions);
+    downloadsListEl.appendChild(item);
+  });
+}
+
+function removeCompletedFromList(jobId) {
+  queue = queue.filter((j) => j.id !== jobId);
+  const card = document.getElementById('card-' + jobId);
+  if (card) card.remove();
+  cardRefs.delete(jobId);
+  renderDownloadsManager();
+  syncEmptyState();
+  saveState();
+}
+
+document.getElementById('btn-paste').onclick = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    const trimmed = (text || '').trim();
+    if (trimmed) {
+      urlInput.value = trimmed;
+      updateCommandBarClearVisibility();
+      await analyzeUrl(trimmed);
+    }
+  } catch (_) {
+    showToast('Could not read clipboard', 'error');
+  }
+};
+
+if (btnClear) {
+  btnClear.addEventListener('click', () => {
+    urlInput.value = '';
+    urlInput.focus();
+    updateCommandBarClearVisibility();
+    clearUrlError();
+  });
+}
+
 document.getElementById('btn-browse').onclick = async () => {
   const folder = await window.electronAPI.selectFolder();
   if (folder) {
@@ -142,9 +576,91 @@ document.getElementById('btn-browse').onclick = async () => {
   }
 };
 
+// ── Settings ──
+const settingsFolderEl = document.getElementById('settings-folder');
+const settingsDefaultQualityEl = document.getElementById('settings-default-quality');
+const settingsDefaultFormatEl = document.getElementById('settings-default-format');
+const appVersionEl = document.getElementById('app-version');
+const ytdlpVersionEl = document.getElementById('ytdlp-version');
+
+async function loadAppVersion() {
+  if (!appVersionEl) return '';
+  appVersionEl.textContent = 'Loading...';
+  const result = await window.electronAPI.getAppVersion();
+  const version = result && result.success && result.version ? result.version : 'Unavailable';
+  appVersionEl.textContent = version;
+  return version;
+}
+
+async function loadYtDlpVersion() {
+  if (!ytdlpVersionEl) return '';
+  ytdlpVersionEl.textContent = 'Loading...';
+  const result = await window.electronAPI.getYtDlpVersion();
+  const version = result && result.success && result.version ? result.version : 'Unavailable';
+  ytdlpVersionEl.textContent = version;
+  return version;
+}
+
+async function loadSettingsForm() {
+  const s = await window.electronAPI.getSettings();
+  settingsFolderEl.value = s.downloadFolder || '';
+  if (s.defaultQuality) settingsDefaultQualityEl.value = s.defaultQuality;
+  if (s.defaultFormat) settingsDefaultFormatEl.value = s.defaultFormat;
+  await loadAppVersion();
+  await loadYtDlpVersion();
+}
+
+document.getElementById('btn-settings-browse').onclick = async () => {
+  const folder = await window.electronAPI.selectFolder();
+  if (folder) {
+    await window.electronAPI.setSettings({ downloadFolder: folder });
+    settingsFolderEl.value = folder;
+    downloadFolder = folder;
+    folderDisplay.value = folder;
+    await saveFolder();
+  }
+};
+
+settingsDefaultQualityEl.addEventListener('change', async () => {
+  const val = settingsDefaultQualityEl.value;
+  await window.electronAPI.setSettings({ defaultQuality: val });
+  resSelect.value = val;
+});
+
+settingsDefaultFormatEl.addEventListener('change', async () => {
+  const val = settingsDefaultFormatEl.value;
+  await window.electronAPI.setSettings({ defaultFormat: val });
+  const radio = document.querySelector(`input[name="fmt"][value="${val}"]`);
+  if (radio) radio.checked = true;
+  resGroup.hidden = val === 'mp3';
+});
+
+document.getElementById('btn-update-ytdlp').onclick = async () => {
+  const btn = document.getElementById('btn-update-ytdlp');
+  const beforeVersion = ytdlpVersionEl ? ytdlpVersionEl.textContent : '';
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  const result = await window.electronAPI.updateYtDlp();
+  btn.disabled = false;
+  btn.textContent = 'Update yt-dlp';
+  const afterVersion = await loadYtDlpVersion();
+  if (result && result.success) {
+    if (beforeVersion && afterVersion && beforeVersion !== 'Loading...' && beforeVersion !== afterVersion) {
+      showToast(`yt-dlp updated: ${beforeVersion} -> ${afterVersion}`, 'success');
+    } else if (afterVersion && afterVersion !== 'Unavailable') {
+      showToast(`yt-dlp version: ${afterVersion}`, 'success');
+    } else {
+      showToast('yt-dlp updated successfully', 'success');
+    }
+  } else {
+    showToast(result && result.message ? result.message : 'Update failed', 'error');
+  }
+};
+
 document.getElementById('btn-add').onclick = () => {
+  clearUrlError();
   if (!downloadFolder) {
-    alert('Please select a download folder first.');
+    setUrlError('Please select a download folder first.');
     return;
   }
 
@@ -154,7 +670,7 @@ document.getElementById('btn-add').onclick = () => {
     .filter((u) => u.length > 0);
 
   if (urls.length === 0) {
-    alert('Please paste at least one URL.');
+    setUrlError('Please paste at least one URL.');
     return;
   }
 
@@ -181,7 +697,7 @@ document.getElementById('btn-add').onclick = () => {
   }
 
   if (valid.length === 0) {
-    alert('No valid URLs found.');
+    setUrlError('Invalid URL. Only HTTP/HTTPS URLs are allowed.');
     return;
   }
 
@@ -222,6 +738,8 @@ document.getElementById('btn-add').onclick = () => {
   }
 
   urlInput.value = '';
+  updateCommandBarClearVisibility();
+  clearUrlError();
   syncEmptyState();
   saveState();
 };
@@ -300,12 +818,14 @@ async function runDownload(job) {
 }
 
 window.electronAPI.onDownloadProgress((data) => {
-  updateJob(data.downloadId, {
+  const updates = {
     percent: data.percent ?? 0,
     fileSize: data.fileSize ?? '',
     status: data.status,
     error: data.error ?? '',
-  });
+  };
+  if (data.outputFilePath) updates.outputFilePath = data.outputFilePath;
+  updateJob(data.downloadId, updates);
 });
 
 function updateJob(id, changes) {
@@ -317,44 +837,86 @@ function updateJob(id, changes) {
   saveState();
 }
 
-function renderCard(job) {
+/**
+ * Creates a professional download card and appends it to the queue.
+ * @param {Object} data - Job data: { id, url, title, status, percent, fileSize, format, resolution, error, thumbnailUrl? }
+ */
+function createDownloadCard(data) {
   emptyState.hidden = true;
 
-  const card = createNode('div', `dl-card ${job.status}`);
+  const job = data;
+  const card = createNode('div', `download-card ${job.status}`);
   card.id = `card-${job.id}`;
+  card.dataset.prevStatus = job.status;
 
-  const top = createNode('div', 'card-top');
-  const urlText = createNode('span', 'card-url', job.url);
+  let hostname = '';
+  try {
+    hostname = new URL(job.url).hostname;
+  } catch (_) {}
+
+  let thumbnailEl;
+  if (job.thumbnailUrl) {
+    const img = document.createElement('img');
+    img.className = 'card-thumbnail';
+    img.src = job.thumbnailUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+    thumbnailEl = img;
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'card-thumbnail';
+    placeholder.setAttribute('role', 'img');
+    placeholder.setAttribute('aria-label', 'Video thumbnail');
+    placeholder.style.background = 'var(--color-surface-elevated)';
+    placeholder.style.display = 'flex';
+    placeholder.style.alignItems = 'center';
+    placeholder.style.justifyContent = 'center';
+    placeholder.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>';
+    thumbnailEl = placeholder;
+  }
+
+  const body = createNode('div', 'card-body');
+  const header = createNode('div', 'card-header');
+  const titleGroup = createNode('div', 'card-title-group');
+  const titleEl = createNode('div', 'card-title', job.title || '');
+  const skeletonTitle = createNode('div', 'skeleton-line title');
+  skeletonTitle.style.display = job.status === 'fetching' ? 'block' : 'none';
+  const siteIconWrap = createNode('span', 'card-site-icon');
+  siteIconWrap.innerHTML = getSiteIconSvg(hostname);
   const badge = createNode('span', `badge badge-${job.status}`, statusLabel(job.status));
-  top.appendChild(urlText);
-  top.appendChild(badge);
+  titleGroup.appendChild(titleEl);
+  titleGroup.appendChild(skeletonTitle);
+  titleGroup.appendChild(siteIconWrap);
+  header.appendChild(titleGroup);
+  header.appendChild(badge);
 
-  const title = createNode('div', 'card-title', job.title || 'Fetching title...');
-
-  const meta = createNode('div', 'card-meta');
   const formatText = job.format === 'mp3'
     ? 'MP3'
     : `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
-  const formatMeta = createNode('span', '', formatText);
-  const fileSize = createNode('span', '', job.fileSize || '');
-  meta.appendChild(formatMeta);
-  meta.appendChild(fileSize);
+  const meta = createNode('div', 'card-meta');
+  const formatSpan = createNode('span', '', formatText);
+  const fileSizeSpan = createNode('span', 'mono', job.fileSize || '—');
+  const skeletonMeta = createNode('div', 'skeleton-line meta');
+  const showSkeleton = job.status === 'fetching';
+  skeletonMeta.style.display = showSkeleton ? 'block' : 'none';
+  if (!showSkeleton) formatSpan.style.display = '';
+  meta.appendChild(formatSpan);
+  meta.appendChild(fileSizeSpan);
+  meta.appendChild(skeletonMeta);
 
+  body.appendChild(header);
+  body.appendChild(meta);
+
+  const progressWrap = createNode('div', 'card-progress-wrap');
   const progressTrack = createNode('div', 'progress-track');
-  const progress = createNode('progress', 'progress-fill');
-  progress.max = 100;
-  progress.value = normalizedPercent(job.percent);
-  progressTrack.appendChild(progress);
-
-  const labels = createNode('div', 'progress-labels');
-  const progressLabel = createNode('span', '', progressText(job));
-  const percentLabel = createNode('span', '', trailingPercent(job.percent, job.status));
-  labels.appendChild(progressLabel);
-  labels.appendChild(percentLabel);
+  const progressFill = createNode('div', 'progress-fill');
+  progressFill.style.width = `${normalizedPercent(job.percent)}%`;
+  progressTrack.appendChild(progressFill);
+  progressWrap.appendChild(progressTrack);
 
   const actions = createNode('div', 'card-actions');
-  const cancelBtn = createNode('button', 'btn-secondary small', 'Cancel');
-  const retryBtn = createNode('button', 'btn-secondary small', 'Retry');
+  const cancelBtn = createNode('button', 'btn-secondary', 'Cancel');
+  const retryBtn = createNode('button', 'btn-secondary', 'Retry');
   cancelBtn.type = 'button';
   retryBtn.type = 'button';
   cancelBtn.onclick = () => void onCancel(job.id);
@@ -362,35 +924,38 @@ function renderCard(job) {
   actions.appendChild(cancelBtn);
   actions.appendChild(retryBtn);
 
-  const error = createNode('div', 'card-error', '');
-  error.hidden = true;
+  const errorEl = createNode('div', 'card-error', '');
+  errorEl.hidden = true;
 
-  card.appendChild(top);
-  card.appendChild(title);
-  card.appendChild(meta);
-  card.appendChild(progressTrack);
-  card.appendChild(labels);
+  card.appendChild(thumbnailEl);
+  card.appendChild(body);
+  card.appendChild(progressWrap);
   card.appendChild(actions);
-  card.appendChild(error);
+  card.appendChild(errorEl);
 
   queueEl.appendChild(card);
 
   cardRefs.set(job.id, {
     card,
+    titleEl,
+    skeletonTitle,
+    skeletonMeta,
+    siteIconWrap,
     badge,
-    title,
-    formatMeta,
-    fileSize,
-    progress,
-    progressLabel,
-    percentLabel,
+    formatSpan,
+    fileSizeSpan,
+    progressFill,
     actions,
     cancelBtn,
     retryBtn,
-    error,
+    errorEl,
   });
 
   refreshCard(job);
+}
+
+function renderCard(job) {
+  createDownloadCard(job);
 }
 
 function refreshCard(job) {
@@ -398,15 +963,28 @@ function refreshCard(job) {
   if (!refs) return;
 
   const percent = normalizedPercent(job.percent);
+  const prevStatus = refs.card.dataset.prevStatus || '';
+  refs.card.dataset.prevStatus = job.status;
 
-  refs.card.className = `dl-card ${job.status}`;
+  const isFetching = job.status === 'fetching';
+  refs.card.className = `download-card ${job.status}${isFetching ? ' skeleton' : ''}`;
   refs.badge.className = `badge badge-${job.status}`;
   refs.badge.textContent = statusLabel(job.status);
-  refs.title.textContent = job.title || 'Fetching title...';
-  refs.fileSize.textContent = job.fileSize || '';
-  refs.progress.value = percent;
-  refs.progressLabel.textContent = progressText(job);
-  refs.percentLabel.textContent = trailingPercent(percent, job.status);
+  refs.titleEl.textContent = job.title || '';
+  refs.titleEl.style.display = isFetching ? 'none' : '';
+  if (refs.skeletonTitle) refs.skeletonTitle.style.display = isFetching ? 'block' : 'none';
+  refs.formatSpan.style.display = isFetching ? 'none' : '';
+  refs.fileSizeSpan.textContent = job.fileSize || '—';
+  refs.fileSizeSpan.className = 'mono';
+  refs.fileSizeSpan.style.display = isFetching ? 'none' : '';
+  if (refs.skeletonMeta) refs.skeletonMeta.style.display = isFetching ? 'block' : 'none';
+  refs.progressFill.style.width = `${percent}%`;
+  refs.progressFill.classList.toggle('completed', job.status === 'completed' && percent >= 100);
+
+  const formatText = job.format === 'mp3'
+    ? 'MP3'
+    : `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
+  refs.formatSpan.textContent = formatText;
 
   const canCancel = job.status === 'queued' || RUNNING_STATUSES.has(job.status);
   const canRetry = job.status === 'failed' || job.status === 'canceled';
@@ -415,11 +993,15 @@ function refreshCard(job) {
   refs.retryBtn.hidden = !canRetry;
 
   if (job.error) {
-    refs.error.textContent = `Warning: ${job.error}`;
-    refs.error.hidden = false;
+    refs.errorEl.textContent = job.error;
+    refs.errorEl.hidden = false;
   } else {
-    refs.error.textContent = '';
-    refs.error.hidden = true;
+    refs.errorEl.textContent = '';
+    refs.errorEl.hidden = true;
+  }
+
+  if (job.status === 'completed' && prevStatus !== 'completed') {
+    showToast('Task Completed', 'success');
   }
 }
 

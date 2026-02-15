@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -132,7 +132,7 @@ function createWindow() {
       sandbox: true
     },
     frame: false,
-    backgroundColor: '#0f0f1a'
+    backgroundColor: '#09090b'
   });
 
   mainWindow.loadFile('renderer/index.html');
@@ -337,11 +337,25 @@ ipcMain.handle('start-download', async (event, { url, outputFolder, format, reso
       }
 
       if (code === 0) {
+        let outputFilePath = '';
+        try {
+          const entries = fs.readdirSync(safeOutputFolder, { withFileTypes: true });
+          const media = entries
+            .filter((e) => e.isFile() && /\.(mp4|mp3|webm|mkv)$/i.test(e.name))
+            .map((e) => ({
+              name: e.name,
+              path: path.join(safeOutputFolder, e.name),
+              mtime: fs.statSync(path.join(safeOutputFolder, e.name)).mtimeMs
+            }));
+          media.sort((a, b) => b.mtime - a.mtime);
+          if (media.length > 0) outputFilePath = media[0].path;
+        } catch (_) {}
         mainWindow.webContents.send('download-progress', {
           downloadId: safeDownloadId,
           percent: 100,
           fileSize: '',
-          status: 'completed'
+          status: 'completed',
+          outputFilePath: outputFilePath || undefined
         });
         resolve({ success: true });
       } else {
@@ -353,6 +367,99 @@ ipcMain.handle('start-download', async (event, { url, outputFolder, format, reso
           error: 'Download failed. Check the URL or your connection.'
         });
         reject(new Error('yt-dlp exited with code ' + code));
+      }
+    });
+  });
+});
+
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  if (typeof folderPath !== 'string' || !folderPath) return { success: false };
+  try {
+    await shell.openPath(folderPath);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle('play-file', async (event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath) return { success: false };
+  try {
+    await shell.openPath(filePath);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle('get-app-version', async () => {
+  try {
+    return { success: true, version: app.getVersion() };
+  } catch {
+    return { success: false, message: 'Could not read app version.' };
+  }
+});
+
+ipcMain.handle('get-settings', async () => {
+  return readSettings();
+});
+
+ipcMain.handle('set-settings', async (event, settings) => {
+  const current = readSettings();
+  if (settings.downloadFolder != null) current.downloadFolder = settings.downloadFolder;
+  if (settings.defaultQuality != null) current.defaultQuality = settings.defaultQuality;
+  if (settings.defaultFormat != null) current.defaultFormat = settings.defaultFormat;
+  writeSettings(current);
+  return { success: true };
+});
+
+function getYtDlpVersion() {
+  return new Promise((resolve) => {
+    const ytdlp = getToolPath('yt-dlp.exe');
+    const proc = spawn(ytdlp, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', () => resolve({ success: false, message: 'Failed to start yt-dlp.' }));
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ success: false, message: (stderr || 'Could not read yt-dlp version.').trim() });
+        return;
+      }
+      const version = stdout.trim().split(/\r?\n/)[0] || '';
+      if (!version) {
+        resolve({ success: false, message: 'Could not read yt-dlp version.' });
+        return;
+      }
+      resolve({ success: true, version });
+    });
+  });
+}
+
+ipcMain.handle('get-yt-dlp-version', async () => {
+  return getYtDlpVersion();
+});
+
+ipcMain.handle('update-yt-dlp', async () => {
+  return new Promise((resolve) => {
+    const ytdlp = getToolPath('yt-dlp.exe');
+    const proc = spawn(ytdlp, ['-U'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', () => resolve({ success: false, message: 'Failed to start yt-dlp.' }));
+    proc.on('close', async (code) => {
+      if (code === 0) {
+        const versionResult = await getYtDlpVersion();
+        if (versionResult.success) {
+          resolve({ success: true, version: versionResult.version });
+        } else {
+          resolve({ success: true, message: (stdout || 'yt-dlp updated.').trim() });
+        }
+      } else {
+        resolve({ success: false, message: (stderr || stdout || 'Update failed.').trim() });
       }
     });
   });
@@ -377,6 +484,140 @@ ipcMain.handle('cancel-download', async (event, downloadId) => {
     return { success: true };
   } catch {
     return { success: false, message: 'Failed to cancel download.' };
+  }
+});
+
+// ── Media Tools (FFmpeg) ──
+const MEDIA_EXT = /\.(mp4|mp3|mov|avi|mkv|webm|wav|flac|m4a|aac|wma|ogg)$/i;
+
+function getFfmpegPath() {
+  return getToolPath('ffmpeg.exe');
+}
+
+function getFfprobePath() {
+  const base = path.join(isDev ? __dirname : process.resourcesPath, 'tools');
+  const exe = path.join(base, 'ffprobe.exe');
+  return fs.existsSync(exe) ? exe : null;
+}
+
+function getMediaDurationSeconds(inputPath) {
+  const ffprobe = getFfprobePath();
+  if (!ffprobe || typeof inputPath !== 'string' || !fs.existsSync(inputPath)) return null;
+  return new Promise((resolve) => {
+    const proc = spawn(ffprobe, [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      inputPath
+    ], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    proc.stdout.on('data', (d) => { out += d.toString(); });
+    proc.on('error', () => resolve(null));
+    proc.on('close', (code) => {
+      if (code !== 0) return resolve(null);
+      const num = parseFloat(out.trim());
+      resolve(Number.isFinite(num) ? num : null);
+    });
+  });
+}
+
+function parseFfmpegTime(stderrLine) {
+  const m = stderrLine.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10), min = parseInt(m[2], 10), s = parseInt(m[3], 10), cs = parseInt(m[4], 10);
+  return h * 3600 + min * 60 + s + cs / 100;
+}
+
+function runFfmpegWithProgress(inputPath, outputPath, args, durationSeconds) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = getFfmpegPath();
+    if (!fs.existsSync(ffmpeg)) {
+      reject(new Error('FFmpeg not found.'));
+      return;
+    }
+    const fullArgs = ['-i', inputPath, '-y', ...args, outputPath];
+    const proc = spawn(ffmpeg, fullArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let lastPercent = 0;
+    proc.stderr.on('data', (data) => {
+      const line = data.toString();
+      const t = parseFfmpegTime(line);
+      if (t != null && durationSeconds != null && durationSeconds > 0 && mainWindow) {
+        const p = Math.min(99, Math.round((t / durationSeconds) * 100));
+        if (p > lastPercent) {
+          lastPercent = p;
+          mainWindow.webContents.send('media-tools-progress', { percent: p });
+        }
+      }
+    });
+    proc.on('error', () => reject(new Error('Failed to start FFmpeg.')));
+    proc.on('close', (code) => {
+      if (mainWindow) mainWindow.webContents.send('media-tools-progress', { percent: 100, outputPath });
+      if (code === 0) resolve({ success: true, outputPath });
+      else reject(new Error('FFmpeg exited with code ' + code));
+    });
+  });
+}
+
+ipcMain.handle('select-media-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Media', extensions: ['mp4', 'mp3', 'mov', 'avi', 'mkv', 'webm', 'wav', 'flac', 'm4a', 'aac', 'wma', 'ogg'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('media-tools-convert', async (event, { inputPath, format }) => {
+  if (typeof inputPath !== 'string' || !fs.existsSync(inputPath) || !['mp4', 'mp3', 'mov', 'avi'].includes(format)) {
+    throw new Error('Invalid input or format.');
+  }
+  const dir = path.dirname(inputPath);
+  const base = path.basename(inputPath, path.extname(inputPath));
+  const outputPath = path.join(dir, base + '.' + format);
+  const duration = await getMediaDurationSeconds(inputPath);
+  if (format === 'mp3') {
+    return runFfmpegWithProgress(inputPath, outputPath, ['-vn', '-acodec', 'libmp3lame', '-q:a', '0'], duration);
+  }
+  if (format === 'mp4') {
+    return runFfmpegWithProgress(inputPath, outputPath, ['-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart'], duration);
+  }
+  if (format === 'mov') {
+    return runFfmpegWithProgress(inputPath, outputPath, ['-c:v', 'libx264', '-c:a', 'aac'], duration);
+  }
+  if (format === 'avi') {
+    return runFfmpegWithProgress(inputPath, outputPath, ['-c:v', 'mpeg4', '-c:a', 'mp3'], duration);
+  }
+  throw new Error('Unsupported format.');
+});
+
+ipcMain.handle('media-tools-compress', async (event, { inputPath, quality }) => {
+  if (typeof inputPath !== 'string' || !fs.existsSync(inputPath)) throw new Error('Invalid input.');
+  const crf = { small: 28, medium: 23, high: 18 }[quality] ?? 23;
+  const dir = path.dirname(inputPath);
+  const base = path.basename(inputPath, path.extname(inputPath));
+  const outputPath = path.join(dir, base + '_compressed.mp4');
+  const duration = await getMediaDurationSeconds(inputPath);
+  return runFfmpegWithProgress(inputPath, outputPath, ['-c:v', 'libx264', '-crf', String(crf), '-c:a', 'aac', '-movflags', '+faststart'], duration);
+});
+
+ipcMain.handle('media-tools-extract-audio', async (event, { inputPath }) => {
+  if (typeof inputPath !== 'string' || !fs.existsSync(inputPath)) throw new Error('Invalid input.');
+  const dir = path.dirname(inputPath);
+  const base = path.basename(inputPath, path.extname(inputPath));
+  const outputPath = path.join(dir, base + '.mp3');
+  const duration = await getMediaDurationSeconds(inputPath);
+  return runFfmpegWithProgress(inputPath, outputPath, ['-vn', '-acodec', 'libmp3lame', '-q:a', '0'], duration);
+});
+
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath) return { success: false };
+  try {
+    shell.showItemInFolder(path.resolve(filePath));
+    return { success: true };
+  } catch {
+    return { success: false };
   }
 });
 

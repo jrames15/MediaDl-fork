@@ -580,12 +580,34 @@ document.getElementById('btn-browse').onclick = async () => {
 const settingsFolderEl = document.getElementById('settings-folder');
 const settingsDefaultQualityEl = document.getElementById('settings-default-quality');
 const settingsDefaultFormatEl = document.getElementById('settings-default-format');
+const appVersionEl = document.getElementById('app-version');
+const ytdlpVersionEl = document.getElementById('ytdlp-version');
+
+async function loadAppVersion() {
+  if (!appVersionEl) return '';
+  appVersionEl.textContent = 'Loading...';
+  const result = await window.electronAPI.getAppVersion();
+  const version = result && result.success && result.version ? result.version : 'Unavailable';
+  appVersionEl.textContent = version;
+  return version;
+}
+
+async function loadYtDlpVersion() {
+  if (!ytdlpVersionEl) return '';
+  ytdlpVersionEl.textContent = 'Loading...';
+  const result = await window.electronAPI.getYtDlpVersion();
+  const version = result && result.success && result.version ? result.version : 'Unavailable';
+  ytdlpVersionEl.textContent = version;
+  return version;
+}
 
 async function loadSettingsForm() {
   const s = await window.electronAPI.getSettings();
   settingsFolderEl.value = s.downloadFolder || '';
   if (s.defaultQuality) settingsDefaultQualityEl.value = s.defaultQuality;
   if (s.defaultFormat) settingsDefaultFormatEl.value = s.defaultFormat;
+  await loadAppVersion();
+  await loadYtDlpVersion();
 }
 
 document.getElementById('btn-settings-browse').onclick = async () => {
@@ -615,13 +637,21 @@ settingsDefaultFormatEl.addEventListener('change', async () => {
 
 document.getElementById('btn-update-ytdlp').onclick = async () => {
   const btn = document.getElementById('btn-update-ytdlp');
+  const beforeVersion = ytdlpVersionEl ? ytdlpVersionEl.textContent : '';
   btn.disabled = true;
-  btn.textContent = 'Updating…';
+  btn.textContent = 'Updating...';
   const result = await window.electronAPI.updateYtDlp();
   btn.disabled = false;
   btn.textContent = 'Update yt-dlp';
+  const afterVersion = await loadYtDlpVersion();
   if (result && result.success) {
-    showToast('yt-dlp updated successfully', 'success');
+    if (beforeVersion && afterVersion && beforeVersion !== 'Loading...' && beforeVersion !== afterVersion) {
+      showToast(`yt-dlp updated: ${beforeVersion} -> ${afterVersion}`, 'success');
+    } else if (afterVersion && afterVersion !== 'Unavailable') {
+      showToast(`yt-dlp version: ${afterVersion}`, 'success');
+    } else {
+      showToast('yt-dlp updated successfully', 'success');
+    }
   } else {
     showToast(result && result.message ? result.message : 'Update failed', 'error');
   }

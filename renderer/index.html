@@ -16,7 +16,7 @@
   <!-- Custom Title Bar (draggable; buttons are clickable via -webkit-app-region: no-drag) -->
   <div class="title-bar">
     <div class="title-bar-left">
-      <span class="app-logo" aria-hidden="true">🎬</span>
+      <img src="../assets/icon.ico" class="app-logo" alt="" aria-hidden="true" />
       <span class="app-name">MediaDl</span>
     </div>
     <div class="title-bar-buttons">
@@ -168,43 +168,61 @@
       <div class="view view-hidden" id="view-settings">
         <section class="settings-section">
           <div class="content-wrap">
-            <h2 class="settings-title">Settings</h2>
-          <form class="settings-form" id="settings-form">
-            <div class="settings-block">
-              <h3 class="settings-block-title">Storage</h3>
-              <div class="settings-row">
-                <label>Download Location</label>
-                <div class="folder-row">
-                  <input type="text" id="settings-folder" placeholder="No folder selected" readonly />
-                  <button type="button" id="btn-settings-browse" class="btn-secondary">Browse</button>
+            <div class="settings-header">
+              <h2 class="settings-title">Settings</h2>
+              <p class="settings-subtitle">Manage defaults, storage, and update tools.</p>
+            </div>
+            <form class="settings-form" id="settings-form">
+              <div class="settings-grid">
+                <div class="settings-card">
+                  <h3 class="settings-card-title">Storage</h3>
+                  <p class="settings-card-subtitle">Choose where downloaded files are saved.</p>
+                  <div class="settings-row">
+                    <label>Download Location</label>
+                    <div class="folder-row">
+                      <input type="text" id="settings-folder" placeholder="No folder selected" readonly />
+                      <button type="button" id="btn-settings-browse" class="btn-secondary">Browse</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="settings-card">
+                  <h3 class="settings-card-title">Defaults</h3>
+                  <p class="settings-card-subtitle">Set default quality and format for new downloads.</p>
+                  <div class="settings-row">
+                    <label for="settings-default-quality">Default Quality</label>
+                    <select id="settings-default-quality">
+                      <option value="2160">4K (2160p)</option>
+                      <option value="1080">1080p Full HD</option>
+                      <option value="720" selected>720p HD</option>
+                    </select>
+                  </div>
+                  <div class="settings-row">
+                    <label for="settings-default-format">Default Format</label>
+                    <select id="settings-default-format">
+                      <option value="mp4" selected>MP4</option>
+                      <option value="mp3">MP3</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="settings-card settings-card-wide">
+                  <h3 class="settings-card-title">Updates</h3>
+                  <p class="settings-card-subtitle">Keep your downloader engine current.</p>
+                  <div class="settings-version-row">
+                    <span class="settings-version-label">App version</span>
+                    <span class="settings-version-value" id="app-version">Loading...</span>
+                  </div>
+                  <div class="settings-version-row">
+                    <span class="settings-version-label">yt-dlp version</span>
+                    <span class="settings-version-value" id="ytdlp-version">Loading...</span>
+                  </div>
+                  <div class="settings-row">
+                    <button type="button" id="btn-update-ytdlp" class="btn-secondary">Update yt-dlp</button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="settings-block">
-              <h3 class="settings-block-title">Defaults</h3>
-              <div class="settings-row">
-                <label for="settings-default-quality">Default Quality</label>
-                <select id="settings-default-quality">
-                  <option value="2160">4K (2160p)</option>
-                  <option value="1080">1080p Full HD</option>
-                  <option value="720" selected>720p HD</option>
-                </select>
-              </div>
-              <div class="settings-row">
-                <label for="settings-default-format">Default Format</label>
-                <select id="settings-default-format">
-                  <option value="mp4" selected>MP4</option>
-                  <option value="mp3">MP3</option>
-                </select>
-              </div>
-            </div>
-            <div class="settings-block">
-              <h3 class="settings-block-title">Updates</h3>
-              <div class="settings-row">
-                <button type="button" id="btn-update-ytdlp" class="btn-secondary">Update yt-dlp</button>
-              </div>
-            </div>
-          </form>
+            </form>
           </div>
         </section>
       </div>

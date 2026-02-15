@@ -392,6 +392,14 @@ ipcMain.handle('play-file', async (event, filePath) => {
   }
 });
 
+ipcMain.handle('get-app-version', async () => {
+  try {
+    return { success: true, version: app.getVersion() };
+  } catch {
+    return { success: false, message: 'Could not read app version.' };
+  }
+});
+
 ipcMain.handle('get-settings', async () => {
   return readSettings();
 });
@@ -405,16 +413,54 @@ ipcMain.handle('set-settings', async (event, settings) => {
   return { success: true };
 });
 
+function getYtDlpVersion() {
+  return new Promise((resolve) => {
+    const ytdlp = getToolPath('yt-dlp.exe');
+    const proc = spawn(ytdlp, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', () => resolve({ success: false, message: 'Failed to start yt-dlp.' }));
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ success: false, message: (stderr || 'Could not read yt-dlp version.').trim() });
+        return;
+      }
+      const version = stdout.trim().split(/\r?\n/)[0] || '';
+      if (!version) {
+        resolve({ success: false, message: 'Could not read yt-dlp version.' });
+        return;
+      }
+      resolve({ success: true, version });
+    });
+  });
+}
+
+ipcMain.handle('get-yt-dlp-version', async () => {
+  return getYtDlpVersion();
+});
+
 ipcMain.handle('update-yt-dlp', async () => {
   return new Promise((resolve) => {
     const ytdlp = getToolPath('yt-dlp.exe');
     const proc = spawn(ytdlp, ['-U'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
     let stderr = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
     proc.on('error', () => resolve({ success: false, message: 'Failed to start yt-dlp.' }));
-    proc.on('close', (code) => {
-      if (code === 0) resolve({ success: true });
-      else resolve({ success: false, message: stderr || 'Update failed.' });
+    proc.on('close', async (code) => {
+      if (code === 0) {
+        const versionResult = await getYtDlpVersion();
+        if (versionResult.success) {
+          resolve({ success: true, version: versionResult.version });
+        } else {
+          resolve({ success: true, message: (stdout || 'yt-dlp updated.').trim() });
+        }
+      } else {
+        resolve({ success: false, message: (stderr || stdout || 'Update failed.').trim() });
+      }
     });
   });
 });

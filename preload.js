@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('download-progress', listener);
     return () => ipcRenderer.removeListener('download-progress', listener);
   },
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+  playFile: (filePath) => ipcRenderer.invoke('play-file', filePath),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),
+  updateYtDlp: () => ipcRenderer.invoke('update-yt-dlp'),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),
   closeWindow: () => ipcRenderer.send('window-close'),

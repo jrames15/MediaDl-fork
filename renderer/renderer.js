@@ -48,6 +48,37 @@ function createNode(tag, className, text) {
   return element;
 }
 
+/** Returns inline SVG string for a given hostname (site icon). */
+function getSiteIconSvg(hostname) {
+  if (!hostname) return getSiteIconSvg('default');
+  const h = hostname.toLowerCase();
+  if (h.includes('youtube') || h.includes('youtu.be')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>';
+  }
+  if (h.includes('tiktok')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>';
+  }
+  if (h.includes('facebook') || h.includes('fb.')) {
+    return '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+}
+
+/** Show a toast notification (e.g. "Download complete"). */
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = createNode('div', `toast ${type}`);
+  toast.setAttribute('role', 'status');
+  toast.textContent = message;
+  container.appendChild(toast);
+  const duration = 3500;
+  setTimeout(() => {
+    toast.style.animation = 'toast-in 0.2s ease reverse forwards';
+    setTimeout(() => toast.remove(), 200);
+  }, duration);
+}
+
 function normalizedPercent(value) {
   const safe = Number(value);
   if (!Number.isFinite(safe)) return 0;
@@ -63,6 +94,7 @@ function stateForStorage(job) {
     format: job.format,
     resolution: job.resolution,
     outputFolder: job.outputFolder,
+    outputFilePath: job.outputFilePath || '',
     status: job.status,
     percent: normalizedPercent(job.percent),
     fileSize: job.fileSize || '',
@@ -90,6 +122,15 @@ async function restoreState() {
     downloadFolder = savedFolder;
     folderDisplay.value = savedFolder;
   }
+  const settings = await window.electronAPI.getSettings();
+  if (settings.defaultQuality) {
+    resSelect.value = settings.defaultQuality;
+  }
+  if (settings.defaultFormat) {
+    const radio = document.querySelector(`input[name="fmt"][value="${settings.defaultFormat}"]`);
+    if (radio) radio.checked = true;
+    resGroup.hidden = settings.defaultFormat === 'mp3';
+  }
 
   const raw = localStorage.getItem(STATE_STORAGE_KEY);
   if (!raw) return;
@@ -112,6 +153,7 @@ async function restoreState() {
         format: item.format,
         resolution: item.format === 'mp4' ? String(item.resolution || '720') : null,
         outputFolder: item.outputFolder,
+        outputFilePath: item.outputFilePath || '',
         status: wasRunning ? 'queued' : (item.status || 'queued'),
         percent: wasRunning ? 0 : normalizedPercent(item.percent),
         fileSize: wasRunning ? '' : (item.fileSize || ''),
@@ -133,12 +175,168 @@ document.getElementById('btn-min').onclick = () => window.electronAPI.minimizeWi
 document.getElementById('btn-max').onclick = () => window.electronAPI.maximizeWindow();
 document.getElementById('btn-close').onclick = () => window.electronAPI.closeWindow();
 
+// ── Sidebar view switching ──
+const VIEW_IDS = ['view-home', 'view-downloads', 'view-settings'];
+function switchView(viewId) {
+  VIEW_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === viewId) {
+      el.classList.remove('view-hidden');
+    } else {
+      el.classList.add('view-hidden');
+    }
+  });
+  document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
+    const v = btn.getAttribute('data-view');
+    const targetId = 'view-' + v;
+    btn.classList.toggle('active', targetId === viewId);
+  });
+  if (viewId === 'view-downloads') renderDownloadsManager();
+  if (viewId === 'view-settings') loadSettingsForm();
+}
+
+document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const view = btn.getAttribute('data-view');
+    if (view) switchView('view-' + view);
+  });
+});
+
+// ── Downloads Manager ──
+const downloadsListEl = document.getElementById('downloads-list');
+const downloadsEmptyEl = document.getElementById('downloads-empty');
+
+function renderDownloadsManager() {
+  const completed = queue.filter((j) => j.status === 'completed');
+  downloadsListEl.innerHTML = '';
+  if (completed.length === 0) {
+    downloadsEmptyEl.hidden = false;
+    return;
+  }
+  downloadsEmptyEl.hidden = true;
+  completed.forEach((job) => {
+    const item = createNode('div', 'completed-item');
+    item.dataset.jobId = String(job.id);
+
+    let thumbEl;
+    if (job.thumbnailUrl) {
+      const img = document.createElement('img');
+      img.className = 'completed-item-thumb';
+      img.src = job.thumbnailUrl;
+      img.alt = '';
+      thumbEl = img;
+    } else {
+      const placeholder = createNode('div', 'completed-item-thumb-placeholder');
+      placeholder.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>';
+      thumbEl = placeholder;
+    }
+
+    const info = createNode('div', 'completed-item-info');
+    const title = createNode('div', 'completed-item-title', job.title || 'Unknown');
+    info.appendChild(title);
+
+    const actions = createNode('div', 'completed-item-actions');
+    const btnOpen = createNode('button', 'btn-secondary', 'Open Folder');
+    const btnPlay = createNode('button', 'btn-secondary', 'Play Video');
+    const btnRemove = createNode('button', 'btn-secondary', 'Remove');
+    btnOpen.type = btnPlay.type = btnRemove.type = 'button';
+    btnOpen.onclick = () => window.electronAPI.openFolder(job.outputFolder);
+    btnPlay.onclick = () => {
+      if (job.outputFilePath) {
+        window.electronAPI.playFile(job.outputFilePath);
+      } else {
+        window.electronAPI.openFolder(job.outputFolder);
+      }
+    };
+    btnRemove.onclick = () => removeCompletedFromList(job.id);
+    actions.appendChild(btnOpen);
+    actions.appendChild(btnPlay);
+    actions.appendChild(btnRemove);
+
+    item.appendChild(thumbEl);
+    item.appendChild(info);
+    item.appendChild(actions);
+    downloadsListEl.appendChild(item);
+  });
+}
+
+function removeCompletedFromList(jobId) {
+  queue = queue.filter((j) => j.id !== jobId);
+  const card = document.getElementById('card-' + jobId);
+  if (card) card.remove();
+  cardRefs.delete(jobId);
+  renderDownloadsManager();
+  syncEmptyState();
+  saveState();
+}
+
+document.getElementById('btn-paste').onclick = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) urlInput.value = text;
+  } catch (_) {
+    showToast('Could not read clipboard', 'error');
+  }
+};
+
 document.getElementById('btn-browse').onclick = async () => {
   const folder = await window.electronAPI.selectFolder();
   if (folder) {
     downloadFolder = folder;
     folderDisplay.value = folder;
     await saveFolder();
+  }
+};
+
+// ── Settings ──
+const settingsFolderEl = document.getElementById('settings-folder');
+const settingsDefaultQualityEl = document.getElementById('settings-default-quality');
+const settingsDefaultFormatEl = document.getElementById('settings-default-format');
+
+async function loadSettingsForm() {
+  const s = await window.electronAPI.getSettings();
+  settingsFolderEl.value = s.downloadFolder || '';
+  if (s.defaultQuality) settingsDefaultQualityEl.value = s.defaultQuality;
+  if (s.defaultFormat) settingsDefaultFormatEl.value = s.defaultFormat;
+}
+
+document.getElementById('btn-settings-browse').onclick = async () => {
+  const folder = await window.electronAPI.selectFolder();
+  if (folder) {
+    await window.electronAPI.setSettings({ downloadFolder: folder });
+    settingsFolderEl.value = folder;
+    downloadFolder = folder;
+    folderDisplay.value = folder;
+    await saveFolder();
+  }
+};
+
+settingsDefaultQualityEl.addEventListener('change', async () => {
+  const val = settingsDefaultQualityEl.value;
+  await window.electronAPI.setSettings({ defaultQuality: val });
+  resSelect.value = val;
+});
+
+settingsDefaultFormatEl.addEventListener('change', async () => {
+  const val = settingsDefaultFormatEl.value;
+  await window.electronAPI.setSettings({ defaultFormat: val });
+  const radio = document.querySelector(`input[name="fmt"][value="${val}"]`);
+  if (radio) radio.checked = true;
+  resGroup.hidden = val === 'mp3';
+});
+
+document.getElementById('btn-update-ytdlp').onclick = async () => {
+  const btn = document.getElementById('btn-update-ytdlp');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  const result = await window.electronAPI.updateYtDlp();
+  btn.disabled = false;
+  btn.textContent = 'Update yt-dlp';
+  if (result && result.success) {
+    showToast('yt-dlp updated successfully', 'success');
+  } else {
+    showToast(result && result.message ? result.message : 'Update failed', 'error');
   }
 };
 
@@ -300,12 +498,14 @@ async function runDownload(job) {
 }
 
 window.electronAPI.onDownloadProgress((data) => {
-  updateJob(data.downloadId, {
+  const updates = {
     percent: data.percent ?? 0,
     fileSize: data.fileSize ?? '',
     status: data.status,
     error: data.error ?? '',
-  });
+  };
+  if (data.outputFilePath) updates.outputFilePath = data.outputFilePath;
+  updateJob(data.downloadId, updates);
 });
 
 function updateJob(id, changes) {
@@ -317,44 +517,78 @@ function updateJob(id, changes) {
   saveState();
 }
 
-function renderCard(job) {
+/**
+ * Creates a professional download card and appends it to the queue.
+ * @param {Object} data - Job data: { id, url, title, status, percent, fileSize, format, resolution, error, thumbnailUrl? }
+ */
+function createDownloadCard(data) {
   emptyState.hidden = true;
 
-  const card = createNode('div', `dl-card ${job.status}`);
+  const job = data;
+  const card = createNode('div', `download-card ${job.status}`);
   card.id = `card-${job.id}`;
+  card.dataset.prevStatus = job.status;
 
-  const top = createNode('div', 'card-top');
-  const urlText = createNode('span', 'card-url', job.url);
+  let hostname = '';
+  try {
+    hostname = new URL(job.url).hostname;
+  } catch (_) {}
+
+  let thumbnailEl;
+  if (job.thumbnailUrl) {
+    const img = document.createElement('img');
+    img.className = 'card-thumbnail';
+    img.src = job.thumbnailUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+    thumbnailEl = img;
+  } else {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'card-thumbnail';
+    placeholder.setAttribute('role', 'img');
+    placeholder.setAttribute('aria-label', 'Video thumbnail');
+    placeholder.style.background = 'var(--color-surface-elevated)';
+    placeholder.style.display = 'flex';
+    placeholder.style.alignItems = 'center';
+    placeholder.style.justifyContent = 'center';
+    placeholder.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>';
+    thumbnailEl = placeholder;
+  }
+
+  const body = createNode('div', 'card-body');
+  const header = createNode('div', 'card-header');
+  const titleGroup = createNode('div', 'card-title-group');
+  const titleEl = createNode('div', 'card-title', job.title || 'Fetching title...');
+  const siteIconWrap = createNode('span', 'card-site-icon');
+  siteIconWrap.innerHTML = getSiteIconSvg(hostname);
   const badge = createNode('span', `badge badge-${job.status}`, statusLabel(job.status));
-  top.appendChild(urlText);
-  top.appendChild(badge);
+  titleGroup.appendChild(titleEl);
+  titleGroup.appendChild(siteIconWrap);
+  header.appendChild(titleGroup);
+  header.appendChild(badge);
 
-  const title = createNode('div', 'card-title', job.title || 'Fetching title...');
-
-  const meta = createNode('div', 'card-meta');
   const formatText = job.format === 'mp3'
     ? 'MP3'
     : `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
-  const formatMeta = createNode('span', '', formatText);
-  const fileSize = createNode('span', '', job.fileSize || '');
-  meta.appendChild(formatMeta);
-  meta.appendChild(fileSize);
+  const meta = createNode('div', 'card-meta');
+  const formatSpan = createNode('span', '', formatText);
+  const fileSizeSpan = createNode('span', 'mono', job.fileSize || '—');
+  meta.appendChild(formatSpan);
+  meta.appendChild(fileSizeSpan);
 
+  body.appendChild(header);
+  body.appendChild(meta);
+
+  const progressWrap = createNode('div', 'card-progress-wrap');
   const progressTrack = createNode('div', 'progress-track');
-  const progress = createNode('progress', 'progress-fill');
-  progress.max = 100;
-  progress.value = normalizedPercent(job.percent);
-  progressTrack.appendChild(progress);
-
-  const labels = createNode('div', 'progress-labels');
-  const progressLabel = createNode('span', '', progressText(job));
-  const percentLabel = createNode('span', '', trailingPercent(job.percent, job.status));
-  labels.appendChild(progressLabel);
-  labels.appendChild(percentLabel);
+  const progressFill = createNode('div', 'progress-fill');
+  progressFill.style.width = `${normalizedPercent(job.percent)}%`;
+  progressTrack.appendChild(progressFill);
+  progressWrap.appendChild(progressTrack);
 
   const actions = createNode('div', 'card-actions');
-  const cancelBtn = createNode('button', 'btn-secondary small', 'Cancel');
-  const retryBtn = createNode('button', 'btn-secondary small', 'Retry');
+  const cancelBtn = createNode('button', 'btn-secondary', 'Cancel');
+  const retryBtn = createNode('button', 'btn-secondary', 'Retry');
   cancelBtn.type = 'button';
   retryBtn.type = 'button';
   cancelBtn.onclick = () => void onCancel(job.id);
@@ -362,35 +596,36 @@ function renderCard(job) {
   actions.appendChild(cancelBtn);
   actions.appendChild(retryBtn);
 
-  const error = createNode('div', 'card-error', '');
-  error.hidden = true;
+  const errorEl = createNode('div', 'card-error', '');
+  errorEl.hidden = true;
 
-  card.appendChild(top);
-  card.appendChild(title);
-  card.appendChild(meta);
-  card.appendChild(progressTrack);
-  card.appendChild(labels);
+  card.appendChild(thumbnailEl);
+  card.appendChild(body);
+  card.appendChild(progressWrap);
   card.appendChild(actions);
-  card.appendChild(error);
+  card.appendChild(errorEl);
 
   queueEl.appendChild(card);
 
   cardRefs.set(job.id, {
     card,
+    titleEl,
+    siteIconWrap,
     badge,
-    title,
-    formatMeta,
-    fileSize,
-    progress,
-    progressLabel,
-    percentLabel,
+    formatSpan,
+    fileSizeSpan,
+    progressFill,
     actions,
     cancelBtn,
     retryBtn,
-    error,
+    errorEl,
   });
 
   refreshCard(job);
+}
+
+function renderCard(job) {
+  createDownloadCard(job);
 }
 
 function refreshCard(job) {
@@ -398,15 +633,21 @@ function refreshCard(job) {
   if (!refs) return;
 
   const percent = normalizedPercent(job.percent);
+  const prevStatus = refs.card.dataset.prevStatus || '';
+  refs.card.dataset.prevStatus = job.status;
 
-  refs.card.className = `dl-card ${job.status}`;
+  refs.card.className = `download-card ${job.status}`;
   refs.badge.className = `badge badge-${job.status}`;
   refs.badge.textContent = statusLabel(job.status);
-  refs.title.textContent = job.title || 'Fetching title...';
-  refs.fileSize.textContent = job.fileSize || '';
-  refs.progress.value = percent;
-  refs.progressLabel.textContent = progressText(job);
-  refs.percentLabel.textContent = trailingPercent(percent, job.status);
+  refs.titleEl.textContent = job.title || 'Fetching title...';
+  refs.fileSizeSpan.textContent = job.fileSize || '—';
+  refs.fileSizeSpan.className = 'mono';
+  refs.progressFill.style.width = `${percent}%`;
+
+  const formatText = job.format === 'mp3'
+    ? 'MP3'
+    : `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
+  refs.formatSpan.textContent = formatText;
 
   const canCancel = job.status === 'queued' || RUNNING_STATUSES.has(job.status);
   const canRetry = job.status === 'failed' || job.status === 'canceled';
@@ -415,11 +656,15 @@ function refreshCard(job) {
   refs.retryBtn.hidden = !canRetry;
 
   if (job.error) {
-    refs.error.textContent = `Warning: ${job.error}`;
-    refs.error.hidden = false;
+    refs.errorEl.textContent = job.error;
+    refs.errorEl.hidden = false;
   } else {
-    refs.error.textContent = '';
-    refs.error.hidden = true;
+    refs.errorEl.textContent = '';
+    refs.errorEl.hidden = true;
+  }
+
+  if (job.status === 'completed' && prevStatus !== 'completed') {
+    showToast('Download complete', 'success');
   }
 }
 

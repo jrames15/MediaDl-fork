@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -337,11 +337,25 @@ ipcMain.handle('start-download', async (event, { url, outputFolder, format, reso
       }
 
       if (code === 0) {
+        let outputFilePath = '';
+        try {
+          const entries = fs.readdirSync(safeOutputFolder, { withFileTypes: true });
+          const media = entries
+            .filter((e) => e.isFile() && /\.(mp4|mp3|webm|mkv)$/i.test(e.name))
+            .map((e) => ({
+              name: e.name,
+              path: path.join(safeOutputFolder, e.name),
+              mtime: fs.statSync(path.join(safeOutputFolder, e.name)).mtimeMs
+            }));
+          media.sort((a, b) => b.mtime - a.mtime);
+          if (media.length > 0) outputFilePath = media[0].path;
+        } catch (_) {}
         mainWindow.webContents.send('download-progress', {
           downloadId: safeDownloadId,
           percent: 100,
           fileSize: '',
-          status: 'completed'
+          status: 'completed',
+          outputFilePath: outputFilePath || undefined
         });
         resolve({ success: true });
       } else {
@@ -354,6 +368,53 @@ ipcMain.handle('start-download', async (event, { url, outputFolder, format, reso
         });
         reject(new Error('yt-dlp exited with code ' + code));
       }
+    });
+  });
+});
+
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  if (typeof folderPath !== 'string' || !folderPath) return { success: false };
+  try {
+    await shell.openPath(folderPath);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle('play-file', async (event, filePath) => {
+  if (typeof filePath !== 'string' || !filePath) return { success: false };
+  try {
+    await shell.openPath(filePath);
+    return { success: true };
+  } catch {
+    return { success: false };
+  }
+});
+
+ipcMain.handle('get-settings', async () => {
+  return readSettings();
+});
+
+ipcMain.handle('set-settings', async (event, settings) => {
+  const current = readSettings();
+  if (settings.downloadFolder != null) current.downloadFolder = settings.downloadFolder;
+  if (settings.defaultQuality != null) current.defaultQuality = settings.defaultQuality;
+  if (settings.defaultFormat != null) current.defaultFormat = settings.defaultFormat;
+  writeSettings(current);
+  return { success: true };
+});
+
+ipcMain.handle('update-yt-dlp', async () => {
+  return new Promise((resolve) => {
+    const ytdlp = getToolPath('yt-dlp.exe');
+    const proc = spawn(ytdlp, ['-U'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.on('error', () => resolve({ success: false, message: 'Failed to start yt-dlp.' }));
+    proc.on('close', (code) => {
+      if (code === 0) resolve({ success: true });
+      else resolve({ success: false, message: stderr || 'Update failed.' });
     });
   });
 });

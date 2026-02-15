@@ -41,7 +41,7 @@
 ## 📸 Screenshots
 
   <img width="942" alt="Dashboard View" src="https://github.com/user-attachments/assets/626490c8-2c48-45d0-ab05-66a02833be58" />
-  <img width="943" alt="Download Queue" src="https://github.com/user-attachments/assets/b09d8c12-1dfa-447b-be05-a37a5dc0fc8d" />
+  <img width="890" height="691" alt="Screenshot 2026-02-15 194627" src="https://github.com/user-attachments/assets/9511594b-a2e6-4e4d-ab47-96ca703a7d66" />
   <img width="942" alt="Media Tools" src="https://github.com/user-attachments/assets/cfac6a06-5235-4b13-9afa-52a60655692c" />
   <img width="942" alt="Settings" src="https://github.com/user-attachments/assets/4d43331a-18d5-45cb-8d95-183979f69d4b" />
 

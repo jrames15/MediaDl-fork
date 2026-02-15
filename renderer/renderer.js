@@ -10,10 +10,12 @@ const RUNNING_STATUSES = new Set(['fetching', 'downloading', 'processing']);
 
 const cardRefs = new Map();
 const cancelRequested = new Set();
+const DEBUG_TEST_URL = 'https://www.youtube.com/watch?v=jNQXAC9IVRw';
 
 const urlInput = document.getElementById('url-input');
 const commandBar = document.getElementById('command-bar');
-const btnClear = document.getElementById('btn-clear');
+const btnClearInput = document.getElementById('btn-clear-input');
+const btnClearDone = document.getElementById('btn-clear-done');
 const urlErrorEl = document.getElementById('url-error');
 const folderDisplay = document.getElementById('folder-display');
 const resGroup = document.getElementById('res-group');
@@ -561,13 +563,7 @@ function renderDownloadsManager() {
     const btnRemove = createNode('button', 'btn-secondary', 'Remove');
     btnOpen.type = btnPlay.type = btnRemove.type = 'button';
     btnOpen.onclick = () => window.electronAPI.openFolder(job.outputFolder);
-    btnPlay.onclick = () => {
-      if (job.outputFilePath) {
-        window.electronAPI.playFile(job.outputFilePath);
-      } else {
-        window.electronAPI.openFolder(job.outputFolder);
-      }
-    };
+    btnPlay.onclick = () => void playCompletedJob(job);
     btnRemove.onclick = () => removeCompletedFromList(job.id);
     actions.appendChild(btnOpen);
     actions.appendChild(btnPlay);
@@ -590,6 +586,21 @@ function removeCompletedFromList(jobId) {
   saveState();
 }
 
+function clearDone() {
+  queue = queue.filter((job) => job.status !== 'completed');
+  rebuildQueue();
+  renderDownloadsManager();
+  saveState();
+}
+
+function deleteJob(jobId) {
+  queue = queue.filter((job) => job.id !== jobId);
+  cardRefs.delete(jobId);
+  rebuildQueue();
+  renderDownloadsManager();
+  saveState();
+}
+
 document.getElementById('btn-paste').onclick = async () => {
   try {
     const text = await navigator.clipboard.readText();
@@ -604,8 +615,45 @@ document.getElementById('btn-paste').onclick = async () => {
   }
 };
 
-if (btnClear) {
-  btnClear.addEventListener('click', () => {
+const debugLinkBtn = document.getElementById('btn-debug-link');
+if (debugLinkBtn) {
+  debugLinkBtn.addEventListener('click', async () => {
+    urlInput.value = DEBUG_TEST_URL;
+    updateCommandBarClearVisibility();
+    clearUrlError();
+    await analyzeUrl(DEBUG_TEST_URL);
+  });
+}
+
+async function playCompletedJob(job) {
+  if (!job || !job.outputFolder) return;
+
+  if (!job.outputFilePath) {
+    showToast('Video file missing. Removed from Downloads.', 'error');
+    removeCompletedFromList(job.id);
+    return;
+  }
+
+  const playResult = await window.electronAPI.playFile(job.outputFilePath);
+  if (playResult && playResult.success) return;
+
+  const message = String((playResult && playResult.message) || '').toLowerCase();
+  const isMissingFile = message.includes('not found')
+    || message.includes('does not exist')
+    || message.includes('no such file')
+    || message.includes('path not found');
+
+  if (isMissingFile) {
+    showToast('Video file not found. Removed from Downloads.', 'error');
+    removeCompletedFromList(job.id);
+    return;
+  }
+
+  showToast('Could not open this video file.', 'error');
+}
+
+if (btnClearInput) {
+  btnClearInput.addEventListener('click', () => {
     urlInput.value = '';
     urlInput.focus();
     updateCommandBarClearVisibility();
@@ -753,6 +801,7 @@ document.getElementById('btn-add').onclick = () => {
     queue.map((job) => buildQueueKey(job.url, job.format, job.resolution, job.outputFolder))
   );
   const pendingKeys = new Set();
+  const newJobs = [];
 
   let duplicateCount = 0;
   valid.forEach((url) => {
@@ -775,12 +824,16 @@ document.getElementById('btn-add').onclick = () => {
       title: '',
       error: '',
     };
-    queue.push(job);
-    renderCard(job);
+    newJobs.push(job);
   });
 
   if (duplicateCount > 0) {
     alert(`${duplicateCount} duplicate URL(s) were skipped.`);
+  }
+
+  if (newJobs.length > 0) {
+    queue = [...newJobs, ...queue];
+    rebuildQueue();
   }
 
   urlInput.value = '';
@@ -799,13 +852,9 @@ document.getElementById('btn-start-all').onclick = () => {
   scheduleDownloads();
 };
 
-document.getElementById('btn-clear').onclick = () => {
-  queue = queue.filter(
-    (job) => job.status !== 'completed' && job.status !== 'failed' && job.status !== 'canceled'
-  );
-  rebuildQueue();
-  saveState();
-};
+if (btnClearDone) {
+  btnClearDone.onclick = clearDone;
+}
 
 function scheduleDownloads() {
   while (activeDownloads < MAX_CONCURRENT_DOWNLOADS) {
@@ -963,12 +1012,16 @@ function createDownloadCard(data) {
   const actions = createNode('div', 'card-actions');
   const cancelBtn = createNode('button', 'btn-secondary', 'Cancel');
   const retryBtn = createNode('button', 'btn-secondary', 'Retry');
+  const deleteBtn = createNode('button', 'btn-secondary', 'Delete');
   cancelBtn.type = 'button';
   retryBtn.type = 'button';
+  deleteBtn.type = 'button';
   cancelBtn.onclick = () => void onCancel(job.id);
   retryBtn.onclick = () => onRetry(job.id);
+  deleteBtn.onclick = () => deleteJob(job.id);
   actions.appendChild(cancelBtn);
   actions.appendChild(retryBtn);
+  actions.appendChild(deleteBtn);
 
   const errorEl = createNode('div', 'card-error', '');
   errorEl.hidden = true;
@@ -994,6 +1047,7 @@ function createDownloadCard(data) {
     actions,
     cancelBtn,
     retryBtn,
+    deleteBtn,
     errorEl,
   });
 
@@ -1034,9 +1088,11 @@ function refreshCard(job) {
 
   const canCancel = job.status === 'queued' || RUNNING_STATUSES.has(job.status);
   const canRetry = job.status === 'failed' || job.status === 'canceled';
-  refs.actions.hidden = !(canCancel || canRetry);
+  const canDelete = job.status === 'canceled';
+  refs.actions.hidden = !(canCancel || canRetry || canDelete);
   refs.cancelBtn.hidden = !canCancel;
   refs.retryBtn.hidden = !canRetry;
+  refs.deleteBtn.hidden = !canDelete;
 
   if (job.error) {
     refs.errorEl.textContent = job.error;

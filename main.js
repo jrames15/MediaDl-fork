@@ -118,12 +118,54 @@ function validateDownloadId(downloadId) {
   return downloadId;
 }
 
+function normalizeName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function resolveOutputFilePath({ outputFolder, title, format }) {
+  const resolvedFolder = validateFolder(outputFolder);
+  const preferredExt = format === 'mp3' ? '.mp3' : '.mp4';
+  const titleKey = normalizeName(title);
+
+  const entries = fs.readdirSync(resolvedFolder, { withFileTypes: true });
+  const media = entries
+    .filter((e) => e.isFile() && /\.(mp4|mp3|webm|mkv|m4a)$/i.test(e.name))
+    .map((e) => {
+      const fullPath = path.join(resolvedFolder, e.name);
+      const stat = fs.statSync(fullPath);
+      const ext = path.extname(e.name).toLowerCase();
+      const base = path.basename(e.name, ext);
+      const normalizedBase = normalizeName(base);
+      const titleScore = titleKey && normalizedBase ? (
+        normalizedBase.includes(titleKey) || titleKey.includes(normalizedBase) ? 1 : 0
+      ) : 0;
+      const extScore = ext === preferredExt ? 1 : 0;
+      return {
+        path: fullPath,
+        mtime: stat.mtimeMs || 0,
+        titleScore,
+        extScore,
+      };
+    });
+
+  media.sort((a, b) => {
+    if (b.titleScore !== a.titleScore) return b.titleScore - a.titleScore;
+    if (b.extScore !== a.extScore) return b.extScore - a.extScore;
+    return b.mtime - a.mtime;
+  });
+
+  return media.length > 0 ? media[0].path : '';
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 950,
     height: 700,
-    minWidth: 750,
-    minHeight: 550,
+    minWidth: 900,
+    minHeight: 700,
     icon: path.join(__dirname, 'assets', 'icon.ico'), // ← add this line
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -375,8 +417,8 @@ ipcMain.handle('start-download', async (event, { url, outputFolder, format, reso
 ipcMain.handle('open-folder', async (event, folderPath) => {
   if (typeof folderPath !== 'string' || !folderPath) return { success: false };
   try {
-    await shell.openPath(folderPath);
-    return { success: true };
+    const errorMessage = await shell.openPath(folderPath);
+    return errorMessage ? { success: false, message: errorMessage } : { success: true };
   } catch {
     return { success: false };
   }
@@ -385,10 +427,26 @@ ipcMain.handle('open-folder', async (event, folderPath) => {
 ipcMain.handle('play-file', async (event, filePath) => {
   if (typeof filePath !== 'string' || !filePath) return { success: false };
   try {
-    await shell.openPath(filePath);
-    return { success: true };
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      return { success: false, message: 'File not found.' };
+    }
+    const errorMessage = await shell.openPath(filePath);
+    return errorMessage ? { success: false, message: errorMessage } : { success: true };
   } catch {
     return { success: false };
+  }
+});
+
+ipcMain.handle('resolve-output-file', async (event, payload) => {
+  try {
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, message: 'Invalid payload.' };
+    }
+    const filePath = resolveOutputFilePath(payload);
+    if (!filePath) return { success: false, message: 'No media file found.' };
+    return { success: true, filePath };
+  } catch (error) {
+    return { success: false, message: error.message };
   }
 });
 

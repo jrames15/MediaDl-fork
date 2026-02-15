@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
   playFile: (filePath) => ipcRenderer.invoke('play-file', filePath),
+  resolveOutputFile: (payload) => ipcRenderer.invoke('resolve-output-file', payload),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSettings: (settings) => ipcRenderer.invoke('set-settings', settings),

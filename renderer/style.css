@@ -458,6 +458,32 @@ body {
   transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
 }
 
+.command-bar-debug {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition), transform var(--transition);
+}
+
+.command-bar-debug:hover {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+.command-bar-debug:active {
+  transform: translateY(0);
+}
+
 .command-bar-action:hover {
   background: var(--color-accent-hover);
   transform: translateY(-1px);
@@ -682,6 +708,7 @@ input[type="text"]:focus {
 #queue {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: var(--space-1);
   display: flex;
   flex-direction: column;
@@ -724,16 +751,23 @@ input[type="text"]:focus {
 /* ── Cards: 1px subtle border + backdrop blur ────────────────────────────── */
 .download-card {
   display: grid;
-  grid-template-columns: 80px 1fr;
-  grid-template-rows: auto auto auto auto;
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "thumb title actions"
+    "thumb progress progress"
+    "thumb meta meta"
+    "thumb error error";
+  align-items: start;
   gap: var(--space-2);
   background: var(--color-surface);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-2);
-  min-height: 96px;
+  min-height: 130px;
+  max-height: 130px;
+  overflow: hidden;
   backdrop-filter: blur(10px);
-  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition), gap var(--transition), padding var(--transition);
 }
 
 .download-card:hover {
@@ -746,7 +780,7 @@ input[type="text"]:focus {
 }
 
 .card-thumbnail {
-  grid-row: 1 / -1;
+  grid-area: thumb;
   width: 80px;
   height: 80px;
   border-radius: var(--radius-sm);
@@ -756,14 +790,18 @@ input[type="text"]:focus {
   align-self: start;
 }
 
-.card-body { display: flex; flex-direction: column; min-width: 0; }
+.card-body {
+  display: contents;
+}
 
 .card-header {
+  grid-area: title;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   gap: var(--space-1);
-  margin-bottom: var(--space-1);
+  min-width: 0;
 }
 
 .card-title-group {
@@ -771,7 +809,7 @@ input[type="text"]:focus {
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 .card-title {
@@ -792,17 +830,26 @@ input[type="text"]:focus {
 }
 
 .card-meta {
+  grid-area: meta;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
   font-size: 12px;
   color: var(--color-text-secondary);
-  margin-top: auto;
+  margin-top: 0;
+  min-width: 0;
 }
 
 .card-meta .mono {
   font-family: var(--font-mono);
   font-size: 11px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge {
@@ -822,7 +869,7 @@ input[type="text"]:focus {
 .badge-failed      { background: rgba(239,68,68,0.2); color: var(--color-error); }
 .badge-canceled    { background: rgba(255,255,255,0.08); color: var(--color-text-dim); }
 
-.card-progress-wrap { grid-column: 2; margin-top: var(--space-1); }
+.card-progress-wrap { grid-area: progress; margin-top: 0; }
 
 .progress-track {
   height: 6px;
@@ -843,22 +890,124 @@ input[type="text"]:focus {
 }
 
 .card-actions {
+  grid-area: actions;
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-1);
-  margin-top: var(--space-1);
+  margin-top: 0;
+  min-width: 0;
+  justify-self: end;
+  align-self: start;
 }
 
 .card-actions button {
   height: var(--btn-height);
   padding: 0 var(--space-2);
   font-size: 11px;
+  flex-shrink: 0;
+  min-width: 92px;
 }
 
 .card-error {
-  grid-column: 2;
+  grid-area: error;
   font-size: 11px;
   color: var(--color-error);
   margin-top: var(--space-1);
+}
+
+.download-card.canceled .card-meta {
+  display: none;
+}
+
+.download-card.canceled .card-error {
+  grid-area: meta;
+  margin-top: 0;
+  align-self: center;
+}
+
+@media (max-width: 700px) {
+  .download-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas:
+      "thumb title"
+      "thumb progress"
+      "thumb actions"
+      "thumb meta"
+      "thumb error";
+    row-gap: calc(var(--space-1) + 2px);
+  }
+
+  .card-thumbnail {
+    width: 64px;
+    height: 64px;
+  }
+
+  .card-actions {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .download-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "thumb thumb"
+      "title title"
+      "progress progress"
+      "meta actions"
+      "error error";
+    row-gap: calc(var(--space-1) + 2px);
+  }
+
+  .card-thumbnail {
+    width: 100%;
+    height: 140px;
+  }
+
+  .card-title-group {
+    flex: 1 1 100%;
+  }
+
+  .card-actions {
+    justify-self: end;
+    align-self: center;
+  }
+
+  .card-actions button {
+    flex: 0 0 auto;
+    min-width: 98px;
+    padding: 0 calc(var(--space-2) + 2px);
+    font-size: 12px;
+  }
+
+  .download-card.completed {
+    max-height: 110px;
+    min-height: 0;
+    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-areas:
+      "thumb title"
+      "thumb progress"
+      "thumb meta";
+    align-content: center;
+  }
+
+  .download-card.completed .card-thumbnail {
+    width: 64px;
+    height: 64px;
+    max-height: 64px;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .download-card.completed .card-meta {
+    justify-content: flex-start;
+  }
+
+  .download-card.completed .card-error {
+    display: none;
+  }
 }
 
 /* Skeleton loader (pulsing while Analyzing) ─────────────────────────────── */

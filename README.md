@@ -7,9 +7,9 @@
 A free, open-source Windows desktop app to download videos and music from YouTube, TikTok, Facebook, and 1000+ other sites.
 
 
+<img width="935" height="689" alt="Screenshot 2026-02-15 114647" src="https://github.com/user-attachments/assets/1c1c0ce0-091f-4fab-9770-933b3bf3a5c5" />
+<img width="940" height="690" alt="Screenshot 2026-02-15 114635" src="https://github.com/user-attachments/assets/6a45a85a-41b3-4c5b-93f6-35085eab3e70" />
 
-<img width="1918" height="1146" alt="Screenshot 2026-02-15 105744" src="https://github.com/user-attachments/assets/97f3e6dc-67fc-438f-8d91-593f110c848b" />
-<img width="1909" height="1136" alt="Screenshot 2026-02-15 105846" src="https://github.com/user-attachments/assets/6e4447b4-6d7a-4eea-8307-28b2d113a0e7" />
 
 ---
 

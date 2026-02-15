@@ -12,6 +12,9 @@ const cardRefs = new Map();
 const cancelRequested = new Set();
 
 const urlInput = document.getElementById('url-input');
+const commandBar = document.getElementById('command-bar');
+const btnClear = document.getElementById('btn-clear');
+const urlErrorEl = document.getElementById('url-error');
 const folderDisplay = document.getElementById('folder-display');
 const resGroup = document.getElementById('res-group');
 const resSelect = document.getElementById('res-select');
@@ -64,7 +67,23 @@ function getSiteIconSvg(hostname) {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 }
 
-/** Show a toast notification (e.g. "Download complete"). */
+function setUrlError(message) {
+  if (commandBar) commandBar.classList.add('has-error');
+  if (urlErrorEl) {
+    urlErrorEl.textContent = message;
+    urlErrorEl.hidden = false;
+  }
+}
+
+function clearUrlError() {
+  if (commandBar) commandBar.classList.remove('has-error');
+  if (urlErrorEl) {
+    urlErrorEl.textContent = '';
+    urlErrorEl.hidden = true;
+  }
+}
+
+/** Show a toast notification (e.g. "Task Completed"). */
 function showToast(message, type = 'success') {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -175,7 +194,17 @@ document.getElementById('btn-min').onclick = () => window.electronAPI.minimizeWi
 document.getElementById('btn-max').onclick = () => window.electronAPI.maximizeWindow();
 document.getElementById('btn-close').onclick = () => window.electronAPI.closeWindow();
 
-// ── Sidebar view switching ──
+function updateCommandBarClearVisibility() {
+  if (btnClear) btnClear.hidden = !urlInput.value.trim();
+}
+
+urlInput.addEventListener('input', () => {
+  clearUrlError();
+  updateCommandBarClearVisibility();
+});
+urlInput.addEventListener('focus', () => clearUrlError());
+
+// ── Sidebar view switching (fade-in + slide-up 300ms) ──
 const VIEW_IDS = ['view-home', 'view-downloads', 'view-settings', 'view-tools'];
 function switchView(viewId) {
   VIEW_IDS.forEach((id) => {
@@ -183,7 +212,9 @@ function switchView(viewId) {
     if (!el) return;
     if (id === viewId) {
       el.classList.remove('view-hidden');
+      el.classList.add('view-visible');
     } else {
+      el.classList.remove('view-visible');
       el.classList.add('view-hidden');
     }
   });
@@ -194,6 +225,7 @@ function switchView(viewId) {
   });
   if (viewId === 'view-downloads') renderDownloadsManager();
   if (viewId === 'view-settings') loadSettingsForm();
+  if (viewId === 'view-tools') syncToolsEmptyState();
 }
 
 document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
@@ -206,85 +238,211 @@ document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
 // ── Media Tools ──
 let toolsSelectedPath = '';
 let toolsLastOutputPath = '';
+let toolsLastOutputName = '';
+let toolsLastOutputSize = '';
 
+const toolsEmptyState = document.getElementById('tools-empty-state');
+const toolsGrid = document.getElementById('tools-grid');
 const toolsDropZone = document.getElementById('tools-drop-zone');
+const toolsDropZoneGrid = document.getElementById('tools-drop-zone-grid');
 const toolsSelectedFileEl = document.getElementById('tools-selected-file');
+const toolsStatusEl = document.getElementById('tools-status');
 const toolsStatusBar = document.getElementById('tools-status-bar');
 const toolsStatusPercent = document.getElementById('tools-status-percent');
 const toolsProgressFill = document.getElementById('tools-progress-fill');
-const toolsStatusDone = document.getElementById('tools-status-done');
-const btnToolsShowFolder = document.getElementById('btn-tools-show-folder');
+const toolsSuccessContainer = document.getElementById('tools-success-container');
 
 function setToolsProcessing(processing) {
-  toolsStatusDone.hidden = true;
-  toolsStatusBar.hidden = !processing;
+  toolsSuccessContainer.innerHTML = '';
+  if (toolsStatusEl) toolsStatusEl.hidden = !processing;
   if (processing) {
-    toolsStatusPercent.textContent = '0%';
-    toolsProgressFill.style.width = '0%';
+    if (toolsStatusPercent) toolsStatusPercent.textContent = '0%';
+    if (toolsProgressFill) {
+      toolsProgressFill.style.width = '0%';
+      toolsProgressFill.classList.remove('completed');
+    }
   }
 }
 
 function setToolsProgress(percent) {
   const p = Math.min(100, Math.max(0, Number(percent) || 0));
-  toolsStatusPercent.textContent = p + '%';
-  toolsProgressFill.style.width = p + '%';
+  if (toolsStatusPercent) toolsStatusPercent.textContent = p + '%';
+  if (toolsProgressFill) toolsProgressFill.style.width = p + '%';
 }
 
-function setToolsComplete(outputPath) {
+function renderSuccessCard(outputPath, outputName, outputSize) {
   toolsLastOutputPath = outputPath || '';
-  toolsStatusBar.hidden = true;
-  toolsStatusDone.hidden = false;
+  toolsLastOutputName = outputName || (outputPath ? outputPath.replace(/^.*[\\/]/, '') : '');
+  toolsLastOutputSize = outputSize || '—';
+  if (toolsStatusEl) toolsStatusEl.hidden = true;
+  toolsSuccessContainer.innerHTML = '';
+  const card = createNode('div', 'tools-success-card');
+  card.innerHTML = `
+    <div class="tools-success-icon" aria-hidden="true">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="tools-success-meta">
+      <div class="name" title="${escapeAttr(toolsLastOutputName)}">${escapeHtml(toolsLastOutputName)}</div>
+      <div class="size">${escapeHtml(toolsLastOutputSize)}</div>
+    </div>
+    <div class="tools-success-actions">
+      <button type="button" class="btn-secondary btn-open-folder">📁 Open Folder</button>
+      <button type="button" class="btn-secondary btn-play">▶️ Play</button>
+      <button type="button" class="btn-secondary btn-convert-another">Convert Another</button>
+    </div>
+  `;
+  card.querySelector('.btn-open-folder').onclick = () => {
+    if (toolsLastOutputPath) window.electronAPI.showItemInFolder(toolsLastOutputPath);
+  };
+  card.querySelector('.btn-play').onclick = () => {
+    if (toolsLastOutputPath) window.electronAPI.playFile(toolsLastOutputPath);
+  };
+  card.querySelector('.btn-convert-another').onclick = () => {
+    toolsSuccessContainer.innerHTML = '';
+    toolsSelectedPath = '';
+    if (toolsSelectedFileEl) {
+      toolsSelectedFileEl.textContent = 'No file selected';
+      toolsSelectedFileEl.classList.add('muted');
+    }
+    syncToolsEmptyState();
+  };
+  toolsSuccessContainer.appendChild(card);
+  showToast('Task Completed', 'success');
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function setToolsComplete(outputPath, outputName, outputSize) {
+  if (toolsProgressFill) toolsProgressFill.classList.add('completed');
   setToolsProgress(100);
+  renderSuccessCard(outputPath, outputName, outputSize);
 }
 
 window.electronAPI.onMediaToolsProgress((data) => {
   setToolsProgress(data.percent);
   if (data.percent >= 100 && data.outputPath) {
-    setToolsComplete(data.outputPath);
+    setToolsComplete(data.outputPath, data.outputName, data.outputSize);
   }
 });
+
+function syncToolsEmptyState() {
+  const hasFile = !!toolsSelectedPath;
+  if (toolsEmptyState) toolsEmptyState.hidden = hasFile;
+  if (toolsGrid) toolsGrid.hidden = !hasFile;
+}
 
 function toolsPickFile() {
   return window.electronAPI.selectMediaFile().then((path) => {
     if (path) {
       toolsSelectedPath = path;
-      toolsSelectedFileEl.textContent = path.replace(/^.*[\\/]/, '');
-      toolsSelectedFileEl.classList.remove('muted');
+      const name = path.replace(/^.*[\\/]/, '');
+      if (toolsSelectedFileEl) {
+        toolsSelectedFileEl.textContent = name;
+        toolsSelectedFileEl.classList.remove('muted');
+      }
+      syncToolsEmptyState();
     }
   });
 }
 
-toolsDropZone.addEventListener('click', () => void toolsPickFile());
-toolsDropZone.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' || e.key === ' ') {
+function bindToolsDropZone(el) {
+  if (!el) return;
+  el.addEventListener('click', () => void toolsPickFile());
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      void toolsPickFile();
+    }
+  });
+  el.addEventListener('dragover', (e) => {
     e.preventDefault();
-    void toolsPickFile();
-  }
-});
+    e.stopPropagation();
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('drag-over');
+  });
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('drag-over');
+    handleToolsFileDrop(e.dataTransfer);
+  });
+}
 
-toolsDropZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  toolsDropZone.classList.add('drag-over');
-});
+bindToolsDropZone(toolsDropZone);
+bindToolsDropZone(toolsDropZoneGrid);
 
-toolsDropZone.addEventListener('dragleave', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  toolsDropZone.classList.remove('drag-over');
-});
-
-toolsDropZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  toolsDropZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (file && file.path) {
-    toolsSelectedPath = file.path;
+const MEDIA_DROP_EXT = /\.(mp4|mkv|mp3)$/i;
+function handleToolsFileDrop(dataTransfer) {
+  const file = dataTransfer.files && dataTransfer.files[0];
+  if (!file || !file.path || !MEDIA_DROP_EXT.test(file.name)) return;
+  toolsSelectedPath = file.path;
+  if (toolsSelectedFileEl) {
     toolsSelectedFileEl.textContent = file.name;
     toolsSelectedFileEl.classList.remove('muted');
   }
+  syncToolsEmptyState();
+}
+
+// Universal drag & drop: when Media Tools view is active, accept file drop anywhere on window
+function isToolsViewActive() {
+  const view = document.getElementById('view-tools');
+  return view && !view.classList.contains('view-hidden');
+}
+function isHomeViewActive() {
+  const view = document.getElementById('view-home');
+  return view && !view.classList.contains('view-hidden');
+}
+
+document.body.addEventListener('dragover', (e) => {
+  if (isToolsViewActive() && e.dataTransfer.types.includes('Files')) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+  if (isHomeViewActive() && (e.dataTransfer.types.includes('text/uri-list') || e.dataTransfer.types.includes('text/plain'))) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'link';
+  }
 });
+
+document.body.addEventListener('drop', (e) => {
+  if (isToolsViewActive() && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleToolsFileDrop(e.dataTransfer);
+    return;
+  }
+  if (isHomeViewActive()) {
+    const url = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    const trimmed = (url || '').trim();
+    if (!trimmed) return;
+    e.preventDefault();
+    e.stopPropagation();
+    urlInput.value = trimmed;
+    clearUrlError();
+    analyzeUrl(trimmed);
+  }
+});
+
+async function analyzeUrl(url) {
+  try {
+    await window.electronAPI.fetchFormats(url);
+    showToast('Ready to add to queue', 'success');
+  } catch (err) {
+    setUrlError(err && err.message ? err.message : 'Invalid URL. Only HTTP/HTTPS URLs are allowed.');
+  }
+}
 
 async function runTool(invoker, opts) {
   if (!toolsSelectedPath) {
@@ -295,8 +453,7 @@ async function runTool(invoker, opts) {
   try {
     const result = await invoker(opts);
     if (result && result.success && result.outputPath) {
-      setToolsComplete(result.outputPath);
-      showToast('Processing complete', 'success');
+      setToolsComplete(result.outputPath, result.outputName, result.outputSize);
     }
   } catch (err) {
     setToolsProcessing(false);
@@ -318,11 +475,6 @@ document.getElementById('btn-tools-extract').addEventListener('click', () => {
   runTool(window.electronAPI.mediaToolsExtractAudio, { inputPath: toolsSelectedPath });
 });
 
-btnToolsShowFolder.addEventListener('click', () => {
-  if (toolsLastOutputPath) {
-    window.electronAPI.showItemInFolder(toolsLastOutputPath);
-  }
-});
 
 // ── Downloads Manager ──
 const downloadsListEl = document.getElementById('downloads-list');
@@ -395,11 +547,25 @@ function removeCompletedFromList(jobId) {
 document.getElementById('btn-paste').onclick = async () => {
   try {
     const text = await navigator.clipboard.readText();
-    if (text) urlInput.value = text;
+    const trimmed = (text || '').trim();
+    if (trimmed) {
+      urlInput.value = trimmed;
+      updateCommandBarClearVisibility();
+      await analyzeUrl(trimmed);
+    }
   } catch (_) {
     showToast('Could not read clipboard', 'error');
   }
 };
+
+if (btnClear) {
+  btnClear.addEventListener('click', () => {
+    urlInput.value = '';
+    urlInput.focus();
+    updateCommandBarClearVisibility();
+    clearUrlError();
+  });
+}
 
 document.getElementById('btn-browse').onclick = async () => {
   const folder = await window.electronAPI.selectFolder();
@@ -462,8 +628,9 @@ document.getElementById('btn-update-ytdlp').onclick = async () => {
 };
 
 document.getElementById('btn-add').onclick = () => {
+  clearUrlError();
   if (!downloadFolder) {
-    alert('Please select a download folder first.');
+    setUrlError('Please select a download folder first.');
     return;
   }
 
@@ -473,7 +640,7 @@ document.getElementById('btn-add').onclick = () => {
     .filter((u) => u.length > 0);
 
   if (urls.length === 0) {
-    alert('Please paste at least one URL.');
+    setUrlError('Please paste at least one URL.');
     return;
   }
 
@@ -500,7 +667,7 @@ document.getElementById('btn-add').onclick = () => {
   }
 
   if (valid.length === 0) {
-    alert('No valid URLs found.');
+    setUrlError('Invalid URL. Only HTTP/HTTPS URLs are allowed.');
     return;
   }
 
@@ -541,6 +708,8 @@ document.getElementById('btn-add').onclick = () => {
   }
 
   urlInput.value = '';
+  updateCommandBarClearVisibility();
+  clearUrlError();
   syncEmptyState();
   saveState();
 };
@@ -679,11 +848,14 @@ function createDownloadCard(data) {
   const body = createNode('div', 'card-body');
   const header = createNode('div', 'card-header');
   const titleGroup = createNode('div', 'card-title-group');
-  const titleEl = createNode('div', 'card-title', job.title || 'Fetching title...');
+  const titleEl = createNode('div', 'card-title', job.title || '');
+  const skeletonTitle = createNode('div', 'skeleton-line title');
+  skeletonTitle.style.display = job.status === 'fetching' ? 'block' : 'none';
   const siteIconWrap = createNode('span', 'card-site-icon');
   siteIconWrap.innerHTML = getSiteIconSvg(hostname);
   const badge = createNode('span', `badge badge-${job.status}`, statusLabel(job.status));
   titleGroup.appendChild(titleEl);
+  titleGroup.appendChild(skeletonTitle);
   titleGroup.appendChild(siteIconWrap);
   header.appendChild(titleGroup);
   header.appendChild(badge);
@@ -694,8 +866,13 @@ function createDownloadCard(data) {
   const meta = createNode('div', 'card-meta');
   const formatSpan = createNode('span', '', formatText);
   const fileSizeSpan = createNode('span', 'mono', job.fileSize || '—');
+  const skeletonMeta = createNode('div', 'skeleton-line meta');
+  const showSkeleton = job.status === 'fetching';
+  skeletonMeta.style.display = showSkeleton ? 'block' : 'none';
+  if (!showSkeleton) formatSpan.style.display = '';
   meta.appendChild(formatSpan);
   meta.appendChild(fileSizeSpan);
+  meta.appendChild(skeletonMeta);
 
   body.appendChild(header);
   body.appendChild(meta);
@@ -731,6 +908,8 @@ function createDownloadCard(data) {
   cardRefs.set(job.id, {
     card,
     titleEl,
+    skeletonTitle,
+    skeletonMeta,
     siteIconWrap,
     badge,
     formatSpan,
@@ -757,13 +936,20 @@ function refreshCard(job) {
   const prevStatus = refs.card.dataset.prevStatus || '';
   refs.card.dataset.prevStatus = job.status;
 
-  refs.card.className = `download-card ${job.status}`;
+  const isFetching = job.status === 'fetching';
+  refs.card.className = `download-card ${job.status}${isFetching ? ' skeleton' : ''}`;
   refs.badge.className = `badge badge-${job.status}`;
   refs.badge.textContent = statusLabel(job.status);
-  refs.titleEl.textContent = job.title || 'Fetching title...';
+  refs.titleEl.textContent = job.title || '';
+  refs.titleEl.style.display = isFetching ? 'none' : '';
+  if (refs.skeletonTitle) refs.skeletonTitle.style.display = isFetching ? 'block' : 'none';
+  refs.formatSpan.style.display = isFetching ? 'none' : '';
   refs.fileSizeSpan.textContent = job.fileSize || '—';
   refs.fileSizeSpan.className = 'mono';
+  refs.fileSizeSpan.style.display = isFetching ? 'none' : '';
+  if (refs.skeletonMeta) refs.skeletonMeta.style.display = isFetching ? 'block' : 'none';
   refs.progressFill.style.width = `${percent}%`;
+  refs.progressFill.classList.toggle('completed', job.status === 'completed' && percent >= 100);
 
   const formatText = job.format === 'mp3'
     ? 'MP3'
@@ -785,7 +971,7 @@ function refreshCard(job) {
   }
 
   if (job.status === 'completed' && prevStatus !== 'completed') {
-    showToast('Download complete', 'success');
+    showToast('Task Completed', 'success');
   }
 }
 

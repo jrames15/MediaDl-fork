@@ -13,16 +13,10 @@
 </head>
 <body>
 
-  <!-- Custom Title Bar -->
+  <!-- Custom Title Bar (draggable; buttons are clickable via -webkit-app-region: no-drag) -->
   <div class="title-bar">
     <div class="title-bar-left">
-      <span class="app-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="7 10 12 15 17 10" />
-          <line x1="12" y1="15" x2="12" y2="3" />
-        </svg>
-      </span>
+      <span class="app-logo" aria-hidden="true">🎬</span>
       <span class="app-name">MediaDl</span>
     </div>
     <div class="title-bar-buttons">
@@ -67,15 +61,27 @@
       <!-- View: Home (command bar + queue) -->
       <div class="view" id="view-home">
         <section class="command-section">
+          <div class="content-wrap">
           <div class="command-bar-wrapper">
-            <div class="command-bar">
-              <input type="text"
-                     id="url-input"
-                     class="command-bar-input"
-                     placeholder="Paste a URL or enter link to download..."
-                     autocomplete="off" />
-              <button type="button" id="btn-paste" class="command-bar-paste">Paste</button>
+            <div class="command-bar-container">
+              <div class="command-bar" id="command-bar">
+                <button type="button" id="btn-paste" class="command-bar-paste" aria-label="Paste from clipboard" title="Paste">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <div class="command-bar-input-wrap">
+                  <input type="text"
+                         id="url-input"
+                         class="command-bar-input"
+                         placeholder="Paste video link here (YouTube, TikTok, etc...)"
+                         autocomplete="off" />
+                  <button type="button" id="btn-clear" class="command-bar-clear" aria-label="Clear input" title="Clear" hidden>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <button type="button" id="btn-add" class="command-bar-action">Add to Queue</button>
+              </div>
             </div>
+            <p class="command-bar-error" id="url-error" role="alert" hidden></p>
           </div>
           <div class="options-row">
             <div class="field-group">
@@ -109,28 +115,29 @@
                 <button type="button" id="btn-browse" class="btn-secondary">Browse</button>
               </div>
             </div>
-            <button type="button" id="btn-add" class="btn-add-queue">Add to Queue</button>
+          </div>
           </div>
         </section>
         <section class="queue-section">
-          <div class="queue-header">
-            <h2>Download Queue</h2>
-            <div class="queue-actions">
-              <button type="button" id="btn-start-all" class="btn-primary small">Start All</button>
-              <button type="button" id="btn-clear" class="btn-secondary">Clear Done</button>
-            </div>
-          </div>
-          <div id="queue">
-            <div class="empty-state" id="empty-state">
-              <div class="empty-icon" aria-hidden="true">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
+          <div class="content-wrap">
+            <div class="queue-header">
+              <h2>Download Queue</h2>
+              <div class="queue-actions">
+                <button type="button" id="btn-start-all" class="btn-primary small">Start All</button>
+                <button type="button" id="btn-clear" class="btn-secondary">Clear Done</button>
               </div>
-              <p>No downloads yet</p>
-              <p class="muted">Paste a URL and click Add to Queue</p>
+            </div>
+            <div id="queue">
+              <div class="empty-state" id="empty-state">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  </svg>
+                </div>
+                <p>No downloads yet</p>
+                <p class="empty-prompt">Paste a link to get started.</p>
+              </div>
             </div>
           </div>
         </section>
@@ -139,13 +146,20 @@
       <!-- View: Downloads (manager) -->
       <div class="view view-hidden" id="view-downloads">
         <section class="manager-section">
-          <h2 class="manager-title">Downloads</h2>
-          <div id="downloads-list" class="downloads-list">
-            <!-- Filled by renderer.js -->
-          </div>
-          <div class="manager-empty" id="downloads-empty">
-            <p>No downloads yet</p>
-            <p class="muted">Completed downloads will appear here</p>
+          <div class="content-wrap">
+            <h2 class="manager-title">Downloads</h2>
+            <div id="downloads-list" class="downloads-list"></div>
+            <div class="manager-empty" id="downloads-empty">
+              <div class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              </div>
+              <p>No downloads yet</p>
+              <p class="muted">Paste a link to get started.</p>
+            </div>
           </div>
         </section>
       </div>
@@ -153,7 +167,8 @@
       <!-- View: Settings -->
       <div class="view view-hidden" id="view-settings">
         <section class="settings-section">
-          <h2 class="settings-title">Settings</h2>
+          <div class="content-wrap">
+            <h2 class="settings-title">Settings</h2>
           <form class="settings-form" id="settings-form">
             <div class="settings-block">
               <h3 class="settings-block-title">Storage</h3>
@@ -190,71 +205,89 @@
               </div>
             </div>
           </form>
+          </div>
         </section>
       </div>
 
       <!-- View: Media Tools -->
       <div class="view view-hidden" id="view-tools">
         <section class="tools-section">
-          <h2 class="tools-title">Media Tools</h2>
-          <div class="tools-drop-zone" id="tools-drop-zone" role="button" tabindex="0">
-            <span class="tools-drop-zone-text">Drop file here or Click to Browse</span>
-          </div>
-          <p class="tools-selected-file muted" id="tools-selected-file">No file selected</p>
-          <div class="tools-cards">
-            <div class="tool-card">
-              <h3 class="tool-card-title">Convert</h3>
-              <div class="tool-card-row">
-                <label for="tools-format">Format</label>
-                <select id="tools-format">
-                  <option value="mp4">MP4</option>
-                  <option value="mp3">MP3</option>
-                  <option value="mov">MOV</option>
-                  <option value="avi">AVI</option>
-                </select>
-                <button type="button" id="btn-tools-convert" class="btn-primary small">Convert</button>
-              </div>
-            </div>
-            <div class="tool-card">
-              <h3 class="tool-card-title">Compress</h3>
-              <div class="tool-card-row tool-card-toggle-row">
-                <label>Quality</label>
-                <div class="toggle-group">
-                  <label class="toggle-opt">
-                    <input type="radio" name="tools-compress" value="small" />
-                    <span>Small</span>
-                  </label>
-                  <label class="toggle-opt">
-                    <input type="radio" name="tools-compress" value="medium" checked />
-                    <span>Medium</span>
-                  </label>
-                  <label class="toggle-opt">
-                    <input type="radio" name="tools-compress" value="high" />
-                    <span>High</span>
-                  </label>
+          <div class="content-wrap">
+            <h2 class="tools-title">Media Tools</h2>
+            <div class="tools-empty-state" id="tools-empty-state">
+              <div class="tools-drop-zone tools-drop-zone-hero" id="tools-drop-zone" role="button" tabindex="0">
+                <div class="empty-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+                    <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" />
+                  </svg>
                 </div>
-                <button type="button" id="btn-tools-compress" class="btn-primary small">Compress</button>
+                <p>Drop a file or click to browse</p>
+                <p class="empty-prompt">Paste a link to get started.</p>
               </div>
             </div>
-            <div class="tool-card">
-              <h3 class="tool-card-title">Extract Audio</h3>
-              <div class="tool-card-row">
-                <button type="button" id="btn-tools-extract" class="btn-primary small">Convert to MP3</button>
+            <div class="tools-grid" id="tools-grid" hidden>
+              <div class="tools-column-drop">
+                <div class="tools-drop-zone tools-drop-zone-compact" id="tools-drop-zone-grid" role="button" tabindex="0">
+                  <span class="tools-drop-zone-text">Drop file here or Click to Browse</span>
+                </div>
+                <p class="tools-selected-file muted" id="tools-selected-file">No file selected</p>
+              </div>
+              <div class="tools-column-settings">
+                <div class="tools-cards">
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Convert</h3>
+                    <div class="tool-card-row">
+                      <label for="tools-format">Format</label>
+                      <select id="tools-format">
+                        <option value="mp4">MP4</option>
+                        <option value="mp3">MP3</option>
+                        <option value="mov">MOV</option>
+                        <option value="avi">AVI</option>
+                      </select>
+                      <button type="button" id="btn-tools-convert" class="btn-primary small">Convert</button>
+                    </div>
+                  </div>
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Compress</h3>
+                    <div class="tool-card-row tool-card-toggle-row">
+                      <label>Quality</label>
+                      <div class="toggle-group">
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="small" />
+                          <span>Small</span>
+                        </label>
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="medium" checked />
+                          <span>Medium</span>
+                        </label>
+                        <label class="toggle-opt">
+                          <input type="radio" name="tools-compress" value="high" />
+                          <span>High</span>
+                        </label>
+                      </div>
+                      <button type="button" id="btn-tools-compress" class="btn-primary small">Compress</button>
+                    </div>
+                  </div>
+                  <div class="tool-card">
+                    <h3 class="tool-card-title">Extract Audio</h3>
+                    <div class="tool-card-row">
+                      <button type="button" id="btn-tools-extract" class="btn-primary small">Convert to MP3</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="tools-status" id="tools-status">
-            <div class="tools-status-bar" id="tools-status-bar" hidden>
-              <div class="tools-status-label">Processing...</div>
-              <div class="tools-status-percent" id="tools-status-percent">0%</div>
-              <div class="progress-track tools-status-track">
-                <div class="progress-fill" id="tools-progress-fill" style="width: 0%"></div>
+            <div class="tools-status" id="tools-status" hidden>
+              <div class="tools-status-bar" id="tools-status-bar">
+                <div class="tools-status-label">Processing...</div>
+                <div class="tools-status-percent" id="tools-status-percent">0%</div>
+                <div class="progress-track tools-status-track">
+                  <div class="progress-fill" id="tools-progress-fill" style="width: 0%"></div>
+                </div>
               </div>
             </div>
-            <div class="tools-status-done" id="tools-status-done" hidden>
-              <span class="tools-status-done-text">Done.</span>
-              <button type="button" id="btn-tools-show-folder" class="btn-secondary">Show in Folder</button>
-            </div>
+            <div id="tools-success-container"></div>
           </div>
         </section>
       </div>

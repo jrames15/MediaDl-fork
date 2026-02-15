@@ -132,7 +132,7 @@ function createWindow() {
       sandbox: true
     },
     frame: false,
-    backgroundColor: '#0f0f1a'
+    backgroundColor: '#09090b'
   });
 
   mainWindow.loadFile('renderer/index.html');

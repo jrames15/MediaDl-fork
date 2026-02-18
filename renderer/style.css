@@ -773,6 +773,37 @@ input[type="text"]:focus {
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
 }
 
+.btn-primary {
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-3);
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-hover));
+  color: #fff;
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition), filter var(--transition);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.28);
+  filter: saturate(1.08);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
 #queue {
   flex: 1;
   overflow-y: auto;
@@ -1417,6 +1448,37 @@ input[type="text"]:focus {
   width: 100%;
 }
 
+/* Tablet/small-window layout:
+   At ~840px width, move the right feature column below the left side. */
+@media (max-width: 900px) {
+  .tools-section {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .tools-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .tools-column-drop,
+  .tools-column-settings {
+    gap: var(--space-1);
+  }
+
+  .tools-cards {
+    gap: var(--space-1);
+  }
+
+  .tool-card {
+    padding: 14px;
+  }
+
+  #btn-tools-start {
+    height: 44px;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 720px) {
   .tools-grid {
     grid-template-columns: 1fr;
@@ -1433,6 +1495,21 @@ input[type="text"]:focus {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.tool-output-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1);
+}
+
+#tools-output-folder,
+#tools-trim-start,
+#tools-trim-end,
+#tools-gif-duration {
+  height: 40px;
+  border-radius: 10px;
+  font-size: 12px;
 }
 
 .tools-drop-zone {
@@ -1498,6 +1575,33 @@ input[type="text"]:focus {
 .tools-selected-file {
   font-size: 12px;
   color: var(--color-text-secondary);
+}
+
+.tool-help-text {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  line-height: 1.35;
+}
+
+.tools-primary-action {
+  margin-top: var(--space-1);
+}
+
+#btn-tools-start {
+  width: 100%;
+  height: 46px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.24);
+}
+
+#btn-tools-prompt-apply {
+  min-width: 148px;
+}
+
+#btn-tools-prompt-skip {
+  min-width: 96px;
 }
 
 .tools-empty-state {
@@ -1676,6 +1780,11 @@ input[type="text"]:focus {
   color: var(--color-accent);
 }
 
+.tools-status-extra {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
 .tools-status-track {
   height: 8px;
 }
@@ -1692,6 +1801,59 @@ input[type="text"]:focus {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.tools-action-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+}
+
+.tools-action-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(2px);
+}
+
+.tools-action-dialog {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.22);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tools-action-dialog h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.tools-action-subtitle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.tools-action-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.tools-action-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */

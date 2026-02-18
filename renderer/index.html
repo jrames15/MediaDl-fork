@@ -342,7 +342,7 @@
           <div class="content-wrap">
             <div class="tools-header">
               <h2 class="tools-title">Media Tools</h2>
-              <p class="tools-subtitle">Convert, compress, and extract audio from local media files.</p>
+              <p class="tools-subtitle">Build one pipeline and process one or many local media files in one run.</p>
             </div>
             <div class="tools-empty-state" id="tools-empty-state">
               <div class="tools-drop-zone tools-drop-zone-hero" id="tools-drop-zone" role="button" tabindex="0">
@@ -352,36 +352,60 @@
                     <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" />
                   </svg>
                 </div>
-                <p>Drop a file or click to browse</p>
-                <p class="empty-prompt">Paste a link to get started.</p>
+                <p>Drop files or click to browse</p>
+                <p class="empty-prompt">Select media files to start building your task pipeline.</p>
               </div>
             </div>
             <div class="tools-grid" id="tools-grid" hidden>
               <div class="tools-column-drop">
                 <div class="tools-drop-zone tools-drop-zone-compact" id="tools-drop-zone-grid" role="button" tabindex="0">
-                  <span class="tools-drop-zone-text">Drop file here or Click to Browse</span>
+                  <span class="tools-drop-zone-text">Drop files here or Click to Browse</span>
                 </div>
-                <p class="tools-selected-file muted" id="tools-selected-file">No file selected</p>
+                <p class="tools-selected-file muted" id="tools-selected-file">No files selected</p>
+                <div class="tool-card">
+                  <h3 class="tool-card-title">Output</h3>
+                  <div class="tool-card-row tool-output-row">
+                    <input type="text" id="tools-output-folder" readonly placeholder="Same folder as source files" />
+                    <button type="button" id="btn-tools-output-folder" class="btn-secondary">Browse</button>
+                  </div>
+                </div>
               </div>
               <div class="tools-column-settings">
                 <div class="tools-cards">
-                  <div class="tool-card">
-                    <h3 class="tool-card-title">Convert</h3>
+                  <div class="tool-card" id="tool-card-convert">
+                    <h3 class="tool-card-title">Task Builder</h3>
+                    <div class="switch-list" id="tools-row-convert-switch">
+                      <label class="switch-row" for="tools-enable-convert">
+                        <span class="switch-row-text">Convert video format</span>
+                        <input type="checkbox" id="tools-enable-convert" class="switch-input" checked />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
+                    </div>
                     <div class="tool-card-row">
-                      <label for="tools-format">Format</label>
-                      <select id="tools-format">
+                      <label for="tools-convert-format">Format</label>
+                      <select id="tools-convert-format">
                         <option value="mp4">MP4</option>
-                        <option value="mp3">MP3</option>
                         <option value="mov">MOV</option>
                         <option value="avi">AVI</option>
+                        <option value="webm">WEBM</option>
                       </select>
-                      <button type="button" id="btn-tools-convert" class="btn-primary small">Convert</button>
+                      <label for="tools-resize-preset">Resize</label>
+                      <select id="tools-resize-preset">
+                        <option value="">Keep source</option>
+                        <option value="1080">1080p</option>
+                        <option value="720">720p</option>
+                        <option value="480">480p</option>
+                      </select>
                     </div>
                   </div>
-                  <div class="tool-card">
+                  <div class="tool-card" id="tool-card-compress">
                     <h3 class="tool-card-title">Compress</h3>
                     <div class="tool-card-row tool-card-toggle-row">
-                      <label>Quality</label>
+                      <label class="switch-row" for="tools-enable-compress">
+                        <span class="switch-row-text">Enable compression</span>
+                        <input type="checkbox" id="tools-enable-compress" class="switch-input" />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
                       <div class="toggle-group">
                         <label class="toggle-opt">
                           <input type="radio" name="tools-compress" value="small" />
@@ -396,25 +420,68 @@
                           <span>High</span>
                         </label>
                       </div>
-                      <button type="button" id="btn-tools-compress" class="btn-primary small">Compress</button>
+                      <p class="tool-help-text">Small: 480p, CRF 28 | Medium: 720p, CRF 23 | High: 1080p, CRF 20</p>
                     </div>
                   </div>
-                  <div class="tool-card">
-                    <h3 class="tool-card-title">Extract Audio</h3>
-                    <div class="tool-card-row">
-                      <button type="button" id="btn-tools-extract" class="btn-primary small">Convert to MP3</button>
+                  <div class="tool-card" id="tool-card-audio">
+                    <h3 class="tool-card-title">Audio</h3>
+                    <div class="tool-card-row" id="tools-row-audio-extract">
+                      <label class="switch-row" for="tools-enable-extract-audio">
+                        <span class="switch-row-text">Extract audio</span>
+                        <input type="checkbox" id="tools-enable-extract-audio" class="switch-input" />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
+                      <select id="tools-audio-format">
+                        <option value="mp3">MP3</option>
+                        <option value="wav">WAV</option>
+                        <option value="aac">AAC</option>
+                      </select>
+                    </div>
+                    <div class="tool-card-row" id="tools-row-audio-strip">
+                      <label class="switch-row" for="tools-strip-audio">
+                        <span class="switch-row-text">Strip audio from video</span>
+                        <input type="checkbox" id="tools-strip-audio" class="switch-input" />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
                     </div>
                   </div>
+                  <div class="tool-card" id="tool-card-trim">
+                    <h3 class="tool-card-title">Trim Tool</h3>
+                    <div class="tool-card-row" id="tools-row-trim">
+                      <label class="switch-row" for="tools-enable-trim">
+                        <span class="switch-row-text">Trim clip</span>
+                        <input type="checkbox" id="tools-enable-trim" class="switch-input" />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
+                      <input type="text" id="tools-trim-start" placeholder="Start (00:00:00)" />
+                      <input type="text" id="tools-trim-end" placeholder="End (00:00:10)" />
+                    </div>
+                  </div>
+                  <div class="tool-card" id="tool-card-gif">
+                    <h3 class="tool-card-title">GIF Tool</h3>
+                    <div class="tool-card-row" id="tools-row-gif">
+                      <label class="switch-row" for="tools-enable-gif">
+                        <span class="switch-row-text">Export GIF</span>
+                        <input type="checkbox" id="tools-enable-gif" class="switch-input" />
+                        <span class="switch-track" aria-hidden="true"></span>
+                      </label>
+                      <input type="text" id="tools-gif-duration" placeholder="Duration sec (10)" />
+                    </div>
+                  </div>
+                </div>
+                <div class="tools-primary-action">
+                  <button type="button" id="btn-tools-start" class="btn-primary">Start Processing</button>
                 </div>
               </div>
             </div>
             <div class="tools-status" id="tools-status" hidden>
               <div class="tools-status-bar" id="tools-status-bar">
-                <div class="tools-status-label">Processing...</div>
+                <div class="tools-status-label" id="tools-status-label">Processing...</div>
                 <div class="tools-status-percent" id="tools-status-percent">0%</div>
                 <div class="progress-track tools-status-track">
                   <div class="progress-fill" id="tools-progress-fill"></div>
                 </div>
+                <div class="tools-status-extra" id="tools-status-extra">ETA: --</div>
               </div>
             </div>
             <div id="tools-success-container"></div>
@@ -426,6 +493,51 @@
 
   <!-- Toast container (fixed bottom center) -->
   <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- Media Tools action prompt -->
+  <div class="tools-action-modal" id="tools-action-modal" hidden>
+    <div class="tools-action-backdrop" id="tools-action-backdrop"></div>
+    <div class="tools-action-dialog" role="dialog" aria-modal="true" aria-labelledby="tools-action-title">
+      <h3 id="tools-action-title">What do you want to do with these files?</h3>
+      <p class="tools-action-subtitle">Pick one or more tasks. You can still adjust details in Task Builder.</p>
+      <div class="tools-action-list">
+        <label class="switch-row" for="prompt-convert">
+          <span class="switch-row-text">Convert video format</span>
+          <input type="radio" name="prompt-feature" value="convert" id="prompt-convert" class="switch-input" checked />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row" for="prompt-compress">
+          <span class="switch-row-text">Compress video</span>
+          <input type="radio" name="prompt-feature" value="compress" id="prompt-compress" class="switch-input" />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row" for="prompt-extract">
+          <span class="switch-row-text">Audio tools</span>
+          <input type="radio" name="prompt-feature" value="audio" id="prompt-extract" class="switch-input" />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row" for="prompt-trim">
+          <span class="switch-row-text">Trim clip</span>
+          <input type="radio" name="prompt-feature" value="trim" id="prompt-trim" class="switch-input" />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row" for="prompt-gif">
+          <span class="switch-row-text">Export GIF</span>
+          <input type="radio" name="prompt-feature" value="gif" id="prompt-gif" class="switch-input" />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+        <label class="switch-row" for="prompt-resize">
+          <span class="switch-row-text">Resize resolution</span>
+          <input type="radio" name="prompt-feature" value="resize" id="prompt-resize" class="switch-input" />
+          <span class="switch-track" aria-hidden="true"></span>
+        </label>
+      </div>
+      <div class="tools-action-buttons">
+        <button type="button" id="btn-tools-prompt-skip" class="btn-secondary">Skip</button>
+        <button type="button" id="btn-tools-prompt-apply" class="btn-primary">Apply Selection</button>
+      </div>
+    </div>
+  </div>
 
   <script src="renderer.js"></script>
 </body>

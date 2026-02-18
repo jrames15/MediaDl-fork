@@ -12,55 +12,46 @@ MediaDl provides a premium, "Linear-style" GUI for `yt-dlp` and `FFmpeg`. Downlo
 
 [**📥 Download Latest Release**](https://github.com/kevclint/MediaDl/releases/latest)
 
-*Portable & Lightweight — No installation required.*
+*..Downloading Videos and Music Made Simple..*
 
 </div>
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-### 🚀 Powerful Downloading
-* **4K Support:** Download in the highest quality available (from 144p up to 4K).
-* **Smart Queue:** Add unlimited URLs and manage them in a clean, organized list.
-* **Batch Processing:** Paste multiple links at once to save time.
-* **Live Metrics:** Real-time tracking of file size, speed, and ETA with zero UI jitter.
+### 📥 Effortless Downloading
+* **High Quality:** Supports everything from 144p to **4K**.
+* **Smart Queue:** Easily manage multiple downloads in one organized list.
+* **Batch Paste:** Add multiple links at once to save time.
+* **Live Stats:** Real-time tracking of speed, file size, and progress.
 
-### 🛠️ Media Tools (FFmpeg Powered)
-* **Format Converter:** Seamlessly switch between MP4, MP3, MKV, and AVI.
-* **Audio Extraction:** One-click high-fidelity "Video to MP3" conversion.
-* **Drag & Drop:** Drop local files directly into the app to start processing instantly.
-* **Success Cards:** Professional result cards with "Open Folder" and "Play" shortcuts.
+### 🛠️ Built-in Media Tools
+* **Fast Converter:** Switch between MP4, MP3, MKV, and AVI.
+* **Audio Extractor:** Quickly turn any video into a high-quality MP3.
+* **Drag & Drop:** Drop local files into the app to start processing instantly.
+* **Quick Actions:** Instant "Open Folder" and "Play" shortcuts once finished.
 
-### 🎨 Pro UI/UX
-* **Modern Sidebar:** Clean navigation between Home, Downloads, Tools, and Settings.
-* **Command Bar:** A focused, high-end URL input area with smart clipboard detection.
-* **8px Design System:** Perfectly balanced spacing, typography, and visual hierarchy.
+### 🎨 Modern Design
+* **Clean Navigation:** Simple sidebar to switch between Home, Tools, and Settings.
+* **Smart Input:** A focused search bar that detects links from your clipboard.
+* **Sleek Layout:** A professional, easy-to-read interface designed for speed.
 
 ---
 
 ## 📸 Interface
 
-<div align="center">
-  <img width="800" alt="Dashboard View" src="https://github.com/user-attachments/assets/626490c8-2c48-45d0-ab05-66a02833be58" />
-</div>
+<table>
+  <tr>
+    <td><img width="843" height="978" alt="Screenshot 2026-02-18 225836" src="https://github.com/user-attachments/assets/4eef4978-eec9-459c-8041-798b8f9c580b" /></td>
+    <td><img width="838" height="982" alt="Screenshot 2026-02-18 225843" src="https://github.com/user-attachments/assets/ab5f036b-f69c-40c2-b86e-8fa913dda2f9" /></td>
+  </tr>
+  <tr>
+    <td><img width="838" height="986" alt="Screenshot 2026-02-18 225900" src="https://github.com/user-attachments/assets/af885af3-7262-4c37-8465-9829c01b1a02" /></td>
+    <td><img width="836" height="977" alt="Screenshot 2026-02-18 225909" src="https://github.com/user-attachments/assets/b307709f-7821-4d22-bce9-2e5688e2b1b0" /></td>
+  </tr>
+</table>
 
-<br>
-
-<div align="center">
-  <table>
-    <tr>
-      <td width="50%">
-        <h4 align="center">Smart Queue</h4>
-        <img src="https://github.com/user-attachments/assets/9511594b-a2e6-4e4d-ab47-96ca703a7d66" alt="Smart Queue" width="100%">
-      </td>
-      <td width="50%">
-        <h4 align="center">Media Tools</h4>
-        <img src="https://github.com/user-attachments/assets/cfac6a06-5235-4b13-9afa-52a60655692c" alt="Media Tools" width="100%">
-      </td>
-    </tr>
-  </table>
-</div>
 
 ---
 
@@ -139,15 +130,20 @@ Your `.exe` will appear in the `dist/` folder.
 
 ## ⚠️ Legal Notice
 
-This tool is intended for **personal use only**. Only download content you have permission to download. Respect copyright laws in your country.
+-This tool is intended for **personal use only**. Only download content you have permission to download. Respect copyright laws in your country.
+-Check out the MIT license for more info...
 
 ---
 
-## ⭐ Support
+<div align="center">
+  
+⭐ Support
 
 If you find this useful, give it a **star** on GitHub! It helps others discover the project. 🙏
 
 [![Star on GitHub](https://img.shields.io/github/stars/kevclint/MediaDl?style=social)](https://github.com/kevclint/MediaDl/stargazers)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KevClint/MediaDl&type=date&legend=top-left)](https://www.star-history.com/#KevClint/MediaDl&type=date&legend=top-left)
+
+</div>
 

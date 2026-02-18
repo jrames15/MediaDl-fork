@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'">
+        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MediaDl</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -111,7 +111,17 @@
             </div>
             <p class="command-bar-error" id="url-error" role="alert" hidden></p>
           </div>
-          <div class="options-row options-grid">
+          <div class="options-toolbar">
+            <button type="button" id="btn-toggle-options" class="options-toggle" aria-expanded="true" aria-controls="home-options-grid">
+              <span>Download Options</span>
+              <span class="options-toggle-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </span>
+            </button>
+          </div>
+          <div class="options-row options-grid" id="home-options-grid">
             <div class="option-card option-card-format">
               <label class="option-title">Format</label>
               <p class="option-subtitle">Choose download output type</p>
@@ -298,7 +308,8 @@
                   <div class="settings-row">
                     <label for="settings-theme">Theme</label>
                     <select id="settings-theme">
-                      <option value="light" selected>Light</option>
+                      <option value="system" selected>System Default</option>
+                      <option value="light">Light</option>
                       <option value="dark">Dark</option>
                     </select>
                   </div>
@@ -402,7 +413,7 @@
                 <div class="tools-status-label">Processing...</div>
                 <div class="tools-status-percent" id="tools-status-percent">0%</div>
                 <div class="progress-track tools-status-track">
-                  <div class="progress-fill" id="tools-progress-fill" style="width: 0%"></div>
+                  <div class="progress-fill" id="tools-progress-fill"></div>
                 </div>
               </div>
             </div>

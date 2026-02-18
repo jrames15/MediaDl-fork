@@ -187,9 +187,9 @@ function resolveOutputFilePath({ outputFolder, title, format }) {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 950,
-    height: 700,
-    minWidth: 880,
+    width: 850,
+    height: 990,
+    minWidth: 850,
     minHeight: 990,
     icon: path.join(__dirname, 'assets', 'icon.ico'), // ← add this line
     webPreferences: {
@@ -204,12 +204,41 @@ function createWindow() {
 
   mainWindow.loadFile('renderer/index.html');
 
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    if (typeof targetUrl === 'string' && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+      void shell.openExternal(targetUrl);
+    }
+    return { action: 'deny' };
+  });
   mainWindow.webContents.on('will-navigate', (event, targetUrl) => {
     if (!targetUrl.startsWith('file://')) {
       event.preventDefault();
+      if (typeof targetUrl === 'string' && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
+        void shell.openExternal(targetUrl);
+      }
     }
   });
+}
+
+function killProcessTree(proc) {
+  if (!proc || typeof proc.pid !== 'number' || proc.pid <= 0) {
+    return Promise.resolve(false);
+  }
+
+  if (process.platform === 'win32') {
+    return new Promise((resolve) => {
+      const killer = spawn('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
+      killer.on('close', (code) => resolve(code === 0));
+      killer.on('error', () => resolve(false));
+    });
+  }
+
+  try {
+    proc.kill('SIGTERM');
+    return Promise.resolve(true);
+  } catch {
+    return Promise.resolve(false);
+  }
 }
 
 app.whenReady().then(createWindow);
@@ -383,7 +412,7 @@ ipcMain.handle('start-download', async (
     });
 
     const timeout = setTimeout(() => {
-      proc.kill();
+      void killProcessTree(proc);
       reject(new Error('Download timed out after 10 minutes'));
     }, 10 * 60 * 1000);
 
@@ -418,18 +447,6 @@ ipcMain.handle('start-download', async (
       clearTimeout(timeout);
       runningDownloads.delete(safeDownloadId);
 
-      if (proc.cancelRequested) {
-        mainWindow.webContents.send('download-progress', {
-          downloadId: safeDownloadId,
-          percent: 0,
-          fileSize: '',
-          status: 'canceled',
-          error: 'Download canceled by user.'
-        });
-        resolve({ success: false, canceled: true });
-        return;
-      }
-
       if (code === 0) {
         let outputFilePath = '';
         try {
@@ -452,6 +469,15 @@ ipcMain.handle('start-download', async (
           outputFilePath: outputFilePath || undefined
         });
         resolve({ success: true });
+      } else if (proc.cancelRequested) {
+        mainWindow.webContents.send('download-progress', {
+          downloadId: safeDownloadId,
+          percent: 0,
+          fileSize: '',
+          status: 'canceled',
+          error: 'Download canceled by user.'
+        });
+        resolve({ success: false, canceled: true });
       } else {
         mainWindow.webContents.send('download-progress', {
           downloadId: safeDownloadId,
@@ -534,7 +560,9 @@ ipcMain.handle('set-settings', async (event, settings) => {
   if (settings.downloadFolder != null) current.downloadFolder = settings.downloadFolder;
   if (settings.defaultQuality != null) current.defaultQuality = settings.defaultQuality;
   if (settings.defaultFormat != null) current.defaultFormat = settings.defaultFormat;
-  if (settings.theme === 'light' || settings.theme === 'dark') current.theme = settings.theme;
+  if (settings.theme === 'light' || settings.theme === 'dark' || settings.theme === 'system') {
+    current.theme = settings.theme;
+  }
   const ok = writeSettings(current);
   return ok ? { success: true } : { success: false, message: 'Could not save settings.' };
 });
@@ -605,12 +633,8 @@ ipcMain.handle('cancel-download', async (event, downloadId) => {
   }
 
   proc.cancelRequested = true;
-  try {
-    proc.kill();
-    return { success: true };
-  } catch {
-    return { success: false, message: 'Failed to cancel download.' };
-  }
+  const killed = await killProcessTree(proc);
+  return killed ? { success: true } : { success: false, message: 'Failed to cancel download.' };
 });
 
 // ── Media Tools (FFmpeg) ──

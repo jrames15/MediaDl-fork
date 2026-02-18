@@ -5,6 +5,7 @@ const MAX_CONCURRENT_DOWNLOADS = 2;
 let activeDownloads = 0;
 
 const STATE_STORAGE_KEY = 'mediadl.queue.v1';
+const OPTIONS_VISIBILITY_STORAGE_KEY = 'mediadl.home.optionsCollapsed.v1';
 const QUEUEABLE_STATUSES = new Set(['queued', 'failed', 'canceled']);
 const RUNNING_STATUSES = new Set(['fetching', 'downloading', 'processing']);
 
@@ -23,6 +24,8 @@ const bitrateGroup = document.getElementById('bitrate-group');
 const mp3BitrateSelect = document.getElementById('mp3-bitrate-select');
 const openFolderFinishedToggle = document.getElementById('opt-open-folder-finished');
 const downloadSubtitlesToggle = document.getElementById('opt-download-subtitles');
+const optionsGrid = document.getElementById('home-options-grid');
+const btnToggleOptions = document.getElementById('btn-toggle-options');
 const queueEl = document.getElementById('queue');
 const emptyState = document.getElementById('empty-state');
 const autoOpenedFolders = new Set();
@@ -43,9 +46,34 @@ function syncFormatOptionVisibility() {
   if (bitrateGroup) bitrateGroup.hidden = !isMp3;
 }
 
+function isOptionsCollapsedStored() {
+  try {
+    return localStorage.getItem(OPTIONS_VISIBILITY_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setOptionsCollapsed(collapsed, persist = true) {
+  if (!optionsGrid || !btnToggleOptions) return;
+  optionsGrid.hidden = collapsed;
+  btnToggleOptions.classList.toggle('is-collapsed', collapsed);
+  btnToggleOptions.setAttribute('aria-expanded', String(!collapsed));
+  if (!persist) return;
+  try {
+    localStorage.setItem(OPTIONS_VISIBILITY_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch {}
+}
+
 document.querySelectorAll('input[name="fmt"]').forEach((radio) => {
   radio.addEventListener('change', syncFormatOptionVisibility);
 });
+if (btnToggleOptions) {
+  btnToggleOptions.addEventListener('click', () => {
+    const collapsed = !btnToggleOptions.classList.contains('is-collapsed');
+    setOptionsCollapsed(collapsed, true);
+  });
+}
 
 function initInfoTipPopovers() {
   const wraps = Array.from(document.querySelectorAll('.info-tip-wrap'));
@@ -102,6 +130,43 @@ function getFormatLabel(job) {
     return `MP3 ${String(job.mp3Bitrate || '192')} kbps`;
   }
   return `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
+}
+
+function getCompletedMetaLine(job, siteName) {
+  const site = siteName && siteName !== 'none' ? siteName : 'Unknown';
+  if (job.format === 'mp3') {
+    return `${site} • MP3 • ${String(job.mp3Bitrate || '192')} kbps`;
+  }
+  if (job.format === 'mp4') {
+    return `${site} • MP4 • ${job.resolution ? `${job.resolution}p` : 'Auto'}`;
+  }
+  return `${site} • ${(job.format || 'FILE').toUpperCase()}`;
+}
+
+function getSubtitleLabel(job) {
+  if (!job.downloadSubtitles) return '';
+  if (job.status === 'completed') return 'Subtitles: Downloaded';
+  if (job.status === 'downloading' || job.status === 'processing') return 'Subtitles: Downloading';
+  return 'Subtitles: Enabled';
+}
+
+function getCardTitle(job) {
+  if (job.title && String(job.title).trim()) return job.title;
+  if (job.status === 'queued' || job.status === 'fetching') return 'Preparing download...';
+  return '';
+}
+
+function getProgressPercentLabel(job, percent) {
+  if (job.status === 'downloading' || job.status === 'processing' || job.status === 'completed') {
+    return `${Math.round(percent)}%`;
+  }
+  return '';
+}
+
+function getFileSizeLabel(job) {
+  if (job.fileSize && String(job.fileSize).trim()) return String(job.fileSize).trim();
+  if (job.status === 'completed' || job.status === 'canceled') return '';
+  return '-';
 }
 
 function statusLabel(status) {
@@ -307,23 +372,16 @@ if (btnGithub) {
 
     const repoUrl = 'https://github.com/KevClint/MediaDl';
     try {
-      if (window.electronAPI && typeof window.electronAPI.openExternalUrl === 'function') {
-        const result = await window.electronAPI.openExternalUrl(repoUrl);
-        if (result && result.success) return;
-      }
-    } catch (_) {}
-
-    try {
       window.open(repoUrl, '_blank', 'noopener');
       return;
     } catch (_) {}
 
-    showToast('Could not open GitHub link.', 'error');
+    showToast('Could not open GitHub link. Restart the app and try again.', 'error');
   });
 }
 
 function updateCommandBarClearVisibility() {
-  if (btnClear) btnClear.hidden = !urlInput.value.trim();
+  if (btnClearInput) btnClearInput.hidden = !urlInput.value.trim();
 }
 
 urlInput.addEventListener('input', () => {
@@ -642,29 +700,31 @@ function renderDownloadsManager() {
 
     const info = createNode('div', 'completed-item-info');
     const title = createNode('div', 'completed-item-title', job.title || 'Unknown');
-    const meta = createNode('div', 'completed-item-meta');
-    const fileType = createNode('span', 'completed-item-meta-pill', `Type: ${(job.format || '').toUpperCase() || 'none'}`);
-    const siteText = createNode('span', 'completed-item-meta-pill', `Site: ${site.name}`);
-    if (site.iconSvg) {
-      const siteIcon = createNode('span', 'completed-item-site-icon');
-      siteIcon.innerHTML = site.iconSvg;
-      siteText.prepend(siteIcon);
-    }
-    meta.appendChild(fileType);
-    meta.appendChild(siteText);
+    const meta = createNode('div', 'completed-item-meta', getCompletedMetaLine(job, site.name));
     info.appendChild(title);
     info.appendChild(meta);
 
     const actions = createNode('div', 'completed-item-actions');
-    const btnOpen = createNode('button', 'btn-secondary', 'Open Folder');
-    const btnPlay = createNode('button', 'btn-secondary', 'Play Video');
-    const btnRemove = createNode('button', 'btn-secondary', 'Remove');
+    const statusBadge = createNode('span', 'completed-status-badge', 'Complete');
+    const btnPlay = createNode('button', 'completed-icon-btn');
+    const btnOpen = createNode('button', 'completed-icon-btn');
+    const btnRemove = createNode('button', 'completed-icon-btn danger');
     btnOpen.type = btnPlay.type = btnRemove.type = 'button';
+    btnPlay.title = 'Play';
+    btnPlay.setAttribute('aria-label', 'Play');
+    btnOpen.title = 'Open Folder';
+    btnOpen.setAttribute('aria-label', 'Open Folder');
+    btnRemove.title = 'Delete';
+    btnRemove.setAttribute('aria-label', 'Delete');
+    btnPlay.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M8 6v12l10-6-10-6z"/></svg>';
+    btnOpen.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" aria-hidden="true"><path d="M3 7h5l2 2h11v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>';
+    btnRemove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
     btnOpen.onclick = () => window.electronAPI.openFolder(job.outputFolder);
     btnPlay.onclick = () => void playCompletedJob(job);
     btnRemove.onclick = () => removeCompletedFromList(job.id);
-    actions.appendChild(btnOpen);
+    actions.appendChild(statusBadge);
     actions.appendChild(btnPlay);
+    actions.appendChild(btnOpen);
     actions.appendChild(btnRemove);
 
     item.appendChild(thumbEl);
@@ -765,14 +825,24 @@ const settingsDefaultFormatEl = document.getElementById('settings-default-format
 const settingsThemeEl = document.getElementById('settings-theme');
 const appVersionEl = document.getElementById('app-version');
 const ytdlpVersionEl = document.getElementById('ytdlp-version');
+const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+let themePreference = 'system';
 
-function applyTheme(theme) {
-  const nextTheme = theme === 'dark' ? 'dark' : 'light';
-  document.documentElement.setAttribute('data-theme', nextTheme);
+function normalizeThemePreference(theme) {
+  if (theme === 'dark' || theme === 'light' || theme === 'system') return theme;
+  return 'system';
 }
 
-function getActiveTheme() {
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+function resolveTheme(theme) {
+  const preference = normalizeThemePreference(theme);
+  if (preference === 'system') return systemThemeQuery.matches ? 'dark' : 'light';
+  return preference;
+}
+
+function applyTheme(theme) {
+  themePreference = normalizeThemePreference(theme);
+  const resolved = resolveTheme(themePreference);
+  document.documentElement.setAttribute('data-theme', resolved);
 }
 
 async function loadAppVersion() {
@@ -798,10 +868,10 @@ async function loadSettingsForm() {
   settingsFolderEl.value = s.downloadFolder || '';
   if (s.defaultQuality) settingsDefaultQualityEl.value = s.defaultQuality;
   if (s.defaultFormat) settingsDefaultFormatEl.value = s.defaultFormat;
-  const theme = (s.theme === 'dark' || s.theme === 'light') ? s.theme : getActiveTheme();
+  const theme = normalizeThemePreference(s.theme);
   settingsThemeEl.value = theme;
   applyTheme(theme);
-  if (s.theme !== 'dark' && s.theme !== 'light') {
+  if (s.theme !== 'dark' && s.theme !== 'light' && s.theme !== 'system') {
     await window.electronAPI.setSettings({ theme });
   }
   await loadAppVersion();
@@ -834,10 +904,19 @@ settingsDefaultFormatEl.addEventListener('change', async () => {
 });
 
 settingsThemeEl.addEventListener('change', async () => {
-  const val = settingsThemeEl.value === 'dark' ? 'dark' : 'light';
+  const val = normalizeThemePreference(settingsThemeEl.value);
   applyTheme(val);
   await window.electronAPI.setSettings({ theme: val });
 });
+
+const onSystemThemeChange = () => {
+  if (themePreference === 'system') applyTheme('system');
+};
+if (typeof systemThemeQuery.addEventListener === 'function') {
+  systemThemeQuery.addEventListener('change', onSystemThemeChange);
+} else if (typeof systemThemeQuery.addListener === 'function') {
+  systemThemeQuery.addListener(onSystemThemeChange);
+}
 
 document.getElementById('btn-update-ytdlp').onclick = async () => {
   const btn = document.getElementById('btn-update-ytdlp');
@@ -1080,31 +1159,10 @@ function createDownloadCard(data) {
     hostname = new URL(job.url).hostname;
   } catch (_) {}
 
-  let thumbnailEl;
-  if (job.thumbnailUrl) {
-    const img = document.createElement('img');
-    img.className = 'card-thumbnail';
-    img.src = job.thumbnailUrl;
-    img.alt = '';
-    img.loading = 'lazy';
-    thumbnailEl = img;
-  } else {
-    const placeholder = document.createElement('div');
-    placeholder.className = 'card-thumbnail';
-    placeholder.setAttribute('role', 'img');
-    placeholder.setAttribute('aria-label', 'Video thumbnail');
-    placeholder.style.background = 'var(--color-surface-elevated)';
-    placeholder.style.display = 'flex';
-    placeholder.style.alignItems = 'center';
-    placeholder.style.justifyContent = 'center';
-    placeholder.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l5 3-5 3V9z"/></svg>';
-    thumbnailEl = placeholder;
-  }
-
   const body = createNode('div', 'card-body');
   const header = createNode('div', 'card-header');
   const titleGroup = createNode('div', 'card-title-group');
-  const titleEl = createNode('div', 'card-title', job.title || '');
+  const titleEl = createNode('div', 'card-title', getCardTitle(job));
   const skeletonTitle = createNode('div', 'skeleton-line title');
   skeletonTitle.style.display = job.status === 'fetching' ? 'block' : 'none';
   const siteIconWrap = createNode('span', 'card-site-icon');
@@ -1117,24 +1175,37 @@ function createDownloadCard(data) {
   header.appendChild(badge);
 
   const formatText = getFormatLabel(job);
+  const subtitlesText = getSubtitleLabel(job);
   const meta = createNode('div', 'card-meta');
   const formatSpan = createNode('span', '', formatText);
-  const fileSizeSpan = createNode('span', 'mono', job.fileSize || '—');
+  const subtitleSpan = createNode('span', '', subtitlesText);
+  const fileSizeText = getFileSizeLabel(job);
+  const fileSizeSpan = createNode('span', 'mono', fileSizeText);
+  const errorEl = createNode('span', 'card-error', '');
+  errorEl.hidden = true;
   const skeletonMeta = createNode('div', 'skeleton-line meta');
   const showSkeleton = job.status === 'fetching';
   skeletonMeta.style.display = showSkeleton ? 'block' : 'none';
   if (!showSkeleton) formatSpan.style.display = '';
+  subtitleSpan.style.display = !showSkeleton && subtitlesText ? '' : 'none';
+  fileSizeSpan.style.display = !showSkeleton && fileSizeText ? '' : 'none';
   meta.appendChild(formatSpan);
+  meta.appendChild(subtitleSpan);
   meta.appendChild(fileSizeSpan);
+  meta.appendChild(errorEl);
   meta.appendChild(skeletonMeta);
 
   body.appendChild(header);
   body.appendChild(meta);
 
   const progressWrap = createNode('div', 'card-progress-wrap');
+  const initialPercent = normalizedPercent(job.percent);
+  const progressPercent = createNode('span', 'card-progress-percent', getProgressPercentLabel(job, initialPercent));
+  progressPercent.style.visibility = progressPercent.textContent ? 'visible' : 'hidden';
   const progressTrack = createNode('div', 'progress-track');
   const progressFill = createNode('div', 'progress-fill');
   progressFill.style.width = `${normalizedPercent(job.percent)}%`;
+  progressWrap.appendChild(progressPercent);
   progressTrack.appendChild(progressFill);
   progressWrap.appendChild(progressTrack);
 
@@ -1152,14 +1223,9 @@ function createDownloadCard(data) {
   actions.appendChild(retryBtn);
   actions.appendChild(deleteBtn);
 
-  const errorEl = createNode('div', 'card-error', '');
-  errorEl.hidden = true;
-
-  card.appendChild(thumbnailEl);
   card.appendChild(body);
   card.appendChild(progressWrap);
   card.appendChild(actions);
-  card.appendChild(errorEl);
 
   queueEl.appendChild(card);
 
@@ -1171,7 +1237,9 @@ function createDownloadCard(data) {
     siteIconWrap,
     badge,
     formatSpan,
+    subtitleSpan,
     fileSizeSpan,
+    progressPercent,
     progressFill,
     actions,
     cancelBtn,
@@ -1199,19 +1267,27 @@ function refreshCard(job) {
   refs.card.className = `download-card ${job.status}${isFetching ? ' skeleton' : ''}`;
   refs.badge.className = `badge badge-${job.status}`;
   refs.badge.textContent = statusLabel(job.status);
-  refs.titleEl.textContent = job.title || '';
+  refs.titleEl.textContent = getCardTitle(job);
   refs.titleEl.style.display = isFetching ? 'none' : '';
   if (refs.skeletonTitle) refs.skeletonTitle.style.display = isFetching ? 'block' : 'none';
   refs.formatSpan.style.display = isFetching ? 'none' : '';
-  refs.fileSizeSpan.textContent = job.fileSize || '—';
+  refs.subtitleSpan.style.display = 'none';
+  const fileSizeText = getFileSizeLabel(job);
+  refs.fileSizeSpan.textContent = fileSizeText;
   refs.fileSizeSpan.className = 'mono';
-  refs.fileSizeSpan.style.display = isFetching ? 'none' : '';
+  refs.fileSizeSpan.style.display = !isFetching && fileSizeText ? '' : 'none';
   if (refs.skeletonMeta) refs.skeletonMeta.style.display = isFetching ? 'block' : 'none';
+  const percentLabel = getProgressPercentLabel(job, percent);
+  refs.progressPercent.textContent = percentLabel;
+  refs.progressPercent.style.visibility = percentLabel ? 'visible' : 'hidden';
   refs.progressFill.style.width = `${percent}%`;
   refs.progressFill.classList.toggle('completed', job.status === 'completed' && percent >= 100);
 
   const formatText = getFormatLabel(job);
+  const subtitlesText = getSubtitleLabel(job);
   refs.formatSpan.textContent = formatText;
+  refs.subtitleSpan.textContent = subtitlesText;
+  refs.subtitleSpan.style.display = !isFetching && subtitlesText ? '' : 'none';
 
   const canCancel = job.status === 'queued' || RUNNING_STATUSES.has(job.status);
   const canRetry = job.status === 'failed' || job.status === 'canceled';
@@ -1256,8 +1332,11 @@ async function onCancel(jobId) {
 
   if (!RUNNING_STATUSES.has(job.status)) return;
 
+  cancelRequested.add(jobId);
+  updateJob(jobId, { error: 'Cancel requested...' });
   const result = await window.electronAPI.cancelDownload(jobId);
   if (!result || !result.success) {
+    cancelRequested.delete(jobId);
     updateJob(jobId, { error: result && result.message ? result.message : 'Failed to cancel download.' });
   }
 }
@@ -1321,6 +1400,7 @@ function friendlyError(message) {
 }
 
 void restoreState().finally(() => {
+  setOptionsCollapsed(isOptionsCollapsedStored(), false);
   initInfoTipPopovers();
   saveState();
 });

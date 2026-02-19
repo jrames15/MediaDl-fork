@@ -2,7 +2,7 @@
 
 # 🎬 MediaDl
 
-[![Version](https://img.shields.io/badge/version-2.3.0-6366f1?style=for-the-badge)](https://github.com/kevclint/MediaDl/releases)
+[![Version](https://img.shields.io/badge/version-2.4.0-6366f1?style=for-the-badge)](https://github.com/kevclint/MediaDl/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=for-the-badge)](https://github.com/kevclint/MediaDl/releases)
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
@@ -85,7 +85,13 @@ cd MediaDl
 npm install
 ```
 
-### 3. Download required tools
+### 3. Install Rust toolchain (required by Tauri)
+
+```bash
+rustup toolchain install stable
+```
+
+### 4. Download required tools
 
 Download these two files and place them inside the `tools/` folder:
 
@@ -103,16 +109,15 @@ MediaDl/
     └── ffmpeg.exe   ✅
 ```
 
-### 4. Run the app
+### 5. Run the app
 
 ```bash
 npm start
 ```
 
-### 5. Build your own `.exe`
+### 6. Build your own `.exe` (Tauri)
 
 ```powershell
-$env:CSC_IDENTITY_AUTO_DISCOVERY="false"
 npm run build
 ```
 
@@ -122,7 +127,7 @@ Your `.exe` will appear in the `dist/` folder.
 
 ## 📦 Built With
 
-- [Electron](https://electronjs.org) — Desktop app framework
+- [Tauri 2.0](https://tauri.app) — Desktop app framework
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — Video downloading engine
 - [FFmpeg](https://ffmpeg.org) — Audio/video conversion
 

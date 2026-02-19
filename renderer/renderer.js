@@ -23,7 +23,9 @@ import { createViewSwitcher } from './features/navigation/view-switcher';
 let queue = [];
 let downloadFolder = '';
 let idCounter = 0;
-const MAX_CONCURRENT_DOWNLOADS = 2;
+const MAX_CONCURRENT_DOWNLOADS = 1;
+const MAX_RATE_LIMIT_RETRIES = 3;
+const RATE_LIMIT_BACKOFF_SECONDS = [20, 45, 90];
 let activeDownloads = 0;
 
 const STATE_STORAGE_KEY = 'mediadl.queue.v1';
@@ -33,6 +35,8 @@ const RUNNING_STATUSES = new Set(['fetching', 'downloading', 'processing']);
 
 const cardRefs = new Map();
 const cancelRequested = new Set();
+const rateLimitRetryCounts = new Map();
+const rateLimitRetryTimers = new Map();
 
 const urlInput = document.getElementById('url-input');
 const commandBar = document.getElementById('command-bar');
@@ -77,6 +81,102 @@ const {
   syncFormatOptionVisibility,
   updateCommandBarClearVisibility,
 } = optionsController;
+
+function isRateLimitedError(rawMessage) {
+  const text = String(rawMessage || '').toLowerCase();
+  return text.includes('429')
+    || text.includes('too many requests')
+    || text.includes('rate limit')
+    || text.includes('ratelimit');
+}
+
+function clearRateLimitRetry(jobId) {
+  const timers = rateLimitRetryTimers.get(jobId);
+  if (!timers) return;
+  if (timers.intervalId) clearInterval(timers.intervalId);
+  if (timers.timeoutId) clearTimeout(timers.timeoutId);
+  rateLimitRetryTimers.delete(jobId);
+}
+
+function clearAllRateLimitRetries() {
+  Array.from(rateLimitRetryTimers.keys()).forEach((jobId) => clearRateLimitRetry(jobId));
+}
+
+function scheduleRateLimitRetry(jobId, attemptNumber) {
+  clearRateLimitRetry(jobId);
+
+  const seconds = RATE_LIMIT_BACKOFF_SECONDS[attemptNumber - 1] || RATE_LIMIT_BACKOFF_SECONDS[RATE_LIMIT_BACKOFF_SECONDS.length - 1];
+  let remaining = seconds;
+
+  const renderMessage = () => {
+    updateJob(jobId, {
+      status: 'failed',
+      error: `Rate limited by site (HTTP 429). Auto-retrying in ${remaining}s (attempt ${attemptNumber}/${MAX_RATE_LIMIT_RETRIES}).`,
+    });
+  };
+
+  renderMessage();
+
+  const intervalId = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) return;
+    renderMessage();
+  }, 1000);
+
+  const timeoutId = setTimeout(() => {
+    clearRateLimitRetry(jobId);
+    const job = queue.find((item) => item.id === jobId);
+    if (!job || job.status === 'canceled') return;
+    updateJob(jobId, {
+      status: 'queued',
+      percent: 0,
+      fileSize: '',
+      error: '',
+    });
+    scheduleDownloads();
+  }, seconds * 1000);
+
+  rateLimitRetryTimers.set(jobId, { intervalId, timeoutId });
+}
+
+function initSubtitleSupportHint() {
+  const subtitleLabel = document.querySelector('label.switch-row[for="opt-download-subtitles"]');
+  if (!subtitleLabel) return;
+  if (subtitleLabel.querySelector('.subtitle-support-hint-wrap')) return;
+
+  const textEl = subtitleLabel.querySelector('.switch-row-text');
+  if (!textEl) return;
+  textEl.classList.add('switch-row-text-with-hint');
+
+  const wrap = document.createElement('span');
+  wrap.className = 'subtitle-support-hint-wrap';
+
+  const trigger = document.createElement('span');
+  trigger.className = 'subtitle-support-hint';
+  trigger.textContent = '?';
+  trigger.setAttribute('role', 'button');
+  trigger.setAttribute('tabindex', '0');
+  trigger.setAttribute('aria-label', 'Subtitle support info');
+
+  const tooltip = document.createElement('span');
+  tooltip.className = 'subtitle-support-tooltip';
+  tooltip.textContent = 'Not all videos or music sources provide subtitles. If none are available, no subtitle file will be downloaded.';
+
+  const openTip = () => wrap.classList.add('is-open');
+  const closeTip = () => wrap.classList.remove('is-open');
+
+  trigger.addEventListener('mouseenter', openTip);
+  trigger.addEventListener('mouseleave', closeTip);
+  trigger.addEventListener('focus', openTip);
+  trigger.addEventListener('blur', closeTip);
+  trigger.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeTip();
+  });
+
+  wrap.appendChild(trigger);
+  wrap.appendChild(tooltip);
+  textEl.appendChild(wrap);
+}
 
 function stateForStorage(job) {
   return {
@@ -830,6 +930,8 @@ function renderDownloadsManager() {
 }
 
 function removeCompletedFromList(jobId) {
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
   queue = queue.filter((j) => j.id !== jobId);
   const card = document.getElementById('card-' + jobId);
   if (card) card.remove();
@@ -840,6 +942,12 @@ function removeCompletedFromList(jobId) {
 }
 
 function clearDone() {
+  queue
+    .filter((job) => job.status === 'completed')
+    .forEach((job) => {
+      clearRateLimitRetry(job.id);
+      rateLimitRetryCounts.delete(job.id);
+    });
   queue = queue.filter((job) => job.status !== 'completed');
   rebuildQueue();
   renderDownloadsManager();
@@ -847,6 +955,8 @@ function clearDone() {
 }
 
 function deleteJob(jobId) {
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
   queue = queue.filter((job) => job.id !== jobId);
   cardRefs.delete(jobId);
   rebuildQueue();
@@ -1165,6 +1275,7 @@ async function runDownload(job) {
   if (job.status !== 'queued') return;
   activeDownloads += 1;
   cancelRequested.delete(job.id);
+  clearRateLimitRetry(job.id);
 
   updateJob(job.id, { status: 'fetching', error: '' });
   try {
@@ -1225,6 +1336,20 @@ async function runDownload(job) {
     const rawMessage = (error && typeof error === 'object' && 'message' in error)
       ? error.message
       : String(error || '');
+    if (isRateLimitedError(rawMessage)) {
+      const attempt = (rateLimitRetryCounts.get(job.id) || 0) + 1;
+      rateLimitRetryCounts.set(job.id, attempt);
+      if (attempt <= MAX_RATE_LIMIT_RETRIES) {
+        scheduleRateLimitRetry(job.id, attempt);
+      } else {
+        updateJob(job.id, {
+          status: 'failed',
+          error: `Rate limited by site (HTTP 429). Retried ${MAX_RATE_LIMIT_RETRIES} times. Please wait a bit and try again.`,
+        });
+      }
+      return;
+    }
+    rateLimitRetryCounts.delete(job.id);
     updateJob(job.id, {
       status: 'failed',
       error: friendlyError(rawMessage),
@@ -1258,6 +1383,10 @@ function updateJob(id, changes) {
   const wasCompleted = job.status === 'completed';
 
   Object.assign(job, changes);
+  if (job.status === 'completed' || job.status === 'canceled') {
+    clearRateLimitRetry(job.id);
+    rateLimitRetryCounts.delete(job.id);
+  }
   if (!wasCompleted && job.status === 'completed' && job.openFolderWhenFinished && !autoOpenedFolders.has(job.id)) {
     autoOpenedFolders.add(job.id);
     void window.electronAPI.openFolder(job.outputFolder);
@@ -1437,6 +1566,8 @@ function refreshCard(job) {
 async function onCancel(jobId) {
   const job = queue.find((item) => item.id === jobId);
   if (!job) return;
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
 
   if (job.status === 'queued') {
     updateJob(jobId, {
@@ -1470,6 +1601,7 @@ function onRetry(jobId) {
   if (!job) return;
   if (!QUEUEABLE_STATUSES.has(job.status)) return;
 
+  clearRateLimitRetry(jobId);
   cancelRequested.delete(job.id);
   updateJob(job.id, {
     status: 'queued',
@@ -1492,9 +1624,14 @@ function syncEmptyState() {
   emptyState.hidden = queue.length !== 0;
 }
 
+window.addEventListener('beforeunload', () => {
+  clearAllRateLimitRetries();
+});
+
 void restoreState().finally(() => {
   setOptionsCollapsed(isOptionsCollapsedStored(), false);
   initInfoTipPopovers();
+  initSubtitleSupportHint();
   saveState();
 });
 

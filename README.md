@@ -1,6 +1,6 @@
 ﻿<div align="center">
 
-# ðŸŽ¬ MediaDl
+# 🎬 MediaDl
 
 [![Version](https://img.shields.io/badge/version-2.4.0-6366f1?style=for-the-badge)](https://github.com/kevclint/MediaDl/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=for-the-badge)](https://github.com/kevclint/MediaDl/releases)
@@ -10,7 +10,7 @@
 
 MediaDl provides a premium, "Linear-style" GUI for `yt-dlp` and `FFmpeg`. Download and process media from **YouTube, TikTok, Facebook, and 1000+ other sites** with a single click.
 
-[**ðŸ“¥ Download Latest Release**](https://github.com/kevclint/MediaDl/releases/latest)
+[**📥 Download Latest Release**](https://github.com/kevclint/MediaDl/releases/latest)
 
 *..Downloading Videos and Music Made Simple..*
 
@@ -18,28 +18,28 @@ MediaDl provides a premium, "Linear-style" GUI for `yt-dlp` and `FFmpeg`. Downlo
 
 ---
 
-## âœ¨ Key Features
+## ✨ Key Features
 
-### ðŸ“¥ Effortless Downloading
+### 📥 Effortless Downloading
 * **High Quality:** Supports everything from 144p to **4K**.
 * **Smart Queue:** Easily manage multiple downloads in one organized list.
 * **Batch Paste:** Add multiple links at once to save time.
 * **Live Stats:** Real-time tracking of speed, file size, and progress.
 
-### ðŸ› ï¸ Built-in Media Tools
+### 🛠️ Built-in Media Tools
 * **Fast Converter:** Switch between MP4, MP3, MKV, and AVI.
 * **Audio Extractor:** Quickly turn any video into a high-quality MP3.
 * **Drag & Drop:** Drop local files into the app to start processing instantly.
 * **Quick Actions:** Instant "Open Folder" and "Play" shortcuts once finished.
 
-### ðŸŽ¨ Modern Design
+### 🎨 Modern Design
 * **Clean Navigation:** Simple sidebar to switch between Home, Tools, and Settings.
 * **Smart Input:** A focused search bar that detects links from your clipboard.
 * **Sleek Layout:** A professional, easy-to-read interface designed for speed.
 
 ---
 
-## ðŸ“¸ Interface
+## 📸 Interface
 
 <table>
   <tr>
@@ -55,16 +55,16 @@ MediaDl provides a premium, "Linear-style" GUI for `yt-dlp` and `FFmpeg`. Downlo
 
 ---
 
-## ðŸŒ Supported Sites
+## 🌐 Supported Sites
 
 | Site | Video | Audio |
 |------|-------|-------|
-| YouTube | âœ… | âœ… |
-| TikTok | âœ… | âœ… |
-| Facebook | âœ… | âœ… |
-| Instagram | âœ… | âœ… |
-| Twitter / X | âœ… | âœ… |
-| 1000+ more | âœ… | âœ… |
+| YouTube | ✅ | ✅ |
+| TikTok | ✅ | ✅ |
+| Facebook | ✅ | ✅ |
+| Instagram | ✅ | ✅ |
+| Twitter / X | ✅ | ✅ |
+| 1000+ more | ✅ | ✅ |
 
 > Full list: [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
 
@@ -147,15 +147,15 @@ Build artifacts are generated under:
 
 ---
 
-## ðŸ“¦ Built With
+## 📦 Built With
 
-- [Tauri 2.0](https://tauri.app) â€” Desktop app framework
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) â€” Video downloading engine
-- [FFmpeg](https://ffmpeg.org) â€” Audio/video conversion
+- [Tauri 2.0](https://tauri.app) — Desktop app framework
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — Video downloading engine
+- [FFmpeg](https://ffmpeg.org) — Audio/video conversion
 
 ---
 
-## âš ï¸ Legal Notice
+## ⚠️ Legal Notice
 
 -This tool is intended for **personal use only**. Only download content you have permission to download. Respect copyright laws in your country.
 -Check out the MIT license for more info...
@@ -164,14 +164,15 @@ Build artifacts are generated under:
 
 <div align="center">
   
-â­ Support
+⭐ Support
 
-If you find this useful, give it a **star** on GitHub! It helps others discover the project. ðŸ™
+If you find this useful, give it a **star** on GitHub! It helps others discover the project. 🙏
 
 [![Star on GitHub](https://img.shields.io/github/stars/kevclint/MediaDl?style=social)](https://github.com/kevclint/MediaDl/stargazers)
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KevClint/MediaDl&type=date&legend=top-left)](https://www.star-history.com/#KevClint/MediaDl&type=date&legend=top-left)
 
 </div>
+
 
 

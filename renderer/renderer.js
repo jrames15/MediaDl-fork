@@ -1,7 +1,31 @@
+import {
+  compactTitle,
+  createNode,
+  detectSite,
+  friendlyError,
+  getSiteIconSvg,
+  normalizedPercent,
+  showToast,
+  statusLabel,
+} from './utils/legacy-ui';
+import { createOptionsController } from './features/options/options-controller';
+import {
+  buildQueueKey,
+  getCardTitle,
+  getCompletedMetaLine,
+  getFileSizeLabel,
+  getFormatLabel,
+  getProgressPercentLabel,
+  getSubtitleLabel,
+} from './features/queue/formatters';
+import { createViewSwitcher } from './features/navigation/view-switcher';
+
 let queue = [];
 let downloadFolder = '';
 let idCounter = 0;
-const MAX_CONCURRENT_DOWNLOADS = 2;
+const MAX_CONCURRENT_DOWNLOADS = 1;
+const MAX_RATE_LIMIT_RETRIES = 3;
+const RATE_LIMIT_BACKOFF_SECONDS = [20, 45, 90];
 let activeDownloads = 0;
 
 const STATE_STORAGE_KEY = 'mediadl.queue.v1';
@@ -11,6 +35,8 @@ const RUNNING_STATUSES = new Set(['fetching', 'downloading', 'processing']);
 
 const cardRefs = new Map();
 const cancelRequested = new Set();
+const rateLimitRetryCounts = new Map();
+const rateLimitRetryTimers = new Map();
 
 const urlInput = document.getElementById('url-input');
 const commandBar = document.getElementById('command-bar');
@@ -30,254 +56,126 @@ const queueEl = document.getElementById('queue');
 const emptyState = document.getElementById('empty-state');
 const autoOpenedFolders = new Set();
 
-function getFormat() {
-  return document.querySelector('input[name="fmt"]:checked').value;
-}
-
-function getMp3Bitrate() {
-  const raw = String(mp3BitrateSelect ? mp3BitrateSelect.value : '192');
-  if (raw === '128' || raw === '192' || raw === '320') return raw;
-  return '192';
-}
-
-function syncFormatOptionVisibility() {
-  const isMp3 = getFormat() === 'mp3';
-  resGroup.hidden = isMp3;
-  if (bitrateGroup) bitrateGroup.hidden = !isMp3;
-}
-
-function isOptionsCollapsedStored() {
-  try {
-    return localStorage.getItem(OPTIONS_VISIBILITY_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function setOptionsCollapsed(collapsed, persist = true) {
-  if (!optionsGrid || !btnToggleOptions) return;
-  optionsGrid.hidden = collapsed;
-  btnToggleOptions.classList.toggle('is-collapsed', collapsed);
-  btnToggleOptions.setAttribute('aria-expanded', String(!collapsed));
-  if (!persist) return;
-  try {
-    localStorage.setItem(OPTIONS_VISIBILITY_STORAGE_KEY, collapsed ? '1' : '0');
-  } catch {}
-}
-
-document.querySelectorAll('input[name="fmt"]').forEach((radio) => {
-  radio.addEventListener('change', syncFormatOptionVisibility);
+const optionsController = createOptionsController({
+  optionsVisibilityStorageKey: OPTIONS_VISIBILITY_STORAGE_KEY,
+  urlInput,
+  commandBar,
+  btnClearInput,
+  urlErrorEl,
+  resGroup,
+  bitrateGroup,
+  mp3BitrateSelect,
+  optionsGrid,
+  btnToggleOptions,
 });
-if (btnToggleOptions) {
-  btnToggleOptions.addEventListener('click', () => {
-    const collapsed = !btnToggleOptions.classList.contains('is-collapsed');
-    setOptionsCollapsed(collapsed, true);
-  });
+optionsController.bindOptionEvents();
+
+const {
+  clearUrlError,
+  getFormat,
+  getMp3Bitrate,
+  initInfoTipPopovers,
+  isOptionsCollapsedStored,
+  setOptionsCollapsed,
+  setUrlError,
+  syncFormatOptionVisibility,
+  updateCommandBarClearVisibility,
+} = optionsController;
+
+function isRateLimitedError(rawMessage) {
+  const text = String(rawMessage || '').toLowerCase();
+  return text.includes('429')
+    || text.includes('too many requests')
+    || text.includes('rate limit')
+    || text.includes('ratelimit');
 }
 
-function initInfoTipPopovers() {
-  const wraps = Array.from(document.querySelectorAll('.info-tip-wrap'));
-  if (wraps.length === 0) return;
+function clearRateLimitRetry(jobId) {
+  const timers = rateLimitRetryTimers.get(jobId);
+  if (!timers) return;
+  if (timers.intervalId) clearInterval(timers.intervalId);
+  if (timers.timeoutId) clearTimeout(timers.timeoutId);
+  rateLimitRetryTimers.delete(jobId);
+}
 
-  const closeAll = () => {
-    wraps.forEach((wrap) => {
-      const popover = wrap.querySelector('.info-tip-popover');
-      if (popover) popover.hidden = true;
+function clearAllRateLimitRetries() {
+  Array.from(rateLimitRetryTimers.keys()).forEach((jobId) => clearRateLimitRetry(jobId));
+}
+
+function scheduleRateLimitRetry(jobId, attemptNumber) {
+  clearRateLimitRetry(jobId);
+
+  const seconds = RATE_LIMIT_BACKOFF_SECONDS[attemptNumber - 1] || RATE_LIMIT_BACKOFF_SECONDS[RATE_LIMIT_BACKOFF_SECONDS.length - 1];
+  let remaining = seconds;
+
+  const renderMessage = () => {
+    updateJob(jobId, {
+      status: 'failed',
+      error: `Rate limited by site (HTTP 429). Auto-retrying in ${remaining}s (attempt ${attemptNumber}/${MAX_RATE_LIMIT_RETRIES}).`,
     });
   };
 
-  wraps.forEach((wrap) => {
-    const trigger = wrap.querySelector('.info-tip-trigger');
-    const popover = wrap.querySelector('.info-tip-popover');
-    const closeBtn = wrap.querySelector('.info-tip-close');
-    if (!trigger || !popover) return;
+  renderMessage();
 
-    trigger.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const willOpen = popover.hidden;
-      closeAll();
-      popover.hidden = !willOpen;
+  const intervalId = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) return;
+    renderMessage();
+  }, 1000);
+
+  const timeoutId = setTimeout(() => {
+    clearRateLimitRetry(jobId);
+    const job = queue.find((item) => item.id === jobId);
+    if (!job || job.status === 'canceled') return;
+    updateJob(jobId, {
+      status: 'queued',
+      percent: 0,
+      fileSize: '',
+      error: '',
     });
+    scheduleDownloads();
+  }, seconds * 1000);
 
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        popover.hidden = true;
-      });
-    }
+  rateLimitRetryTimers.set(jobId, { intervalId, timeoutId });
+}
+
+function initSubtitleSupportHint() {
+  const subtitleLabel = document.querySelector('label.switch-row[for="opt-download-subtitles"]');
+  if (!subtitleLabel) return;
+  if (subtitleLabel.querySelector('.subtitle-support-hint-wrap')) return;
+
+  const textEl = subtitleLabel.querySelector('.switch-row-text');
+  if (!textEl) return;
+  textEl.classList.add('switch-row-text-with-hint');
+
+  const wrap = document.createElement('span');
+  wrap.className = 'subtitle-support-hint-wrap';
+
+  const trigger = document.createElement('span');
+  trigger.className = 'subtitle-support-hint';
+  trigger.textContent = '?';
+  trigger.setAttribute('role', 'button');
+  trigger.setAttribute('tabindex', '0');
+  trigger.setAttribute('aria-label', 'Subtitle support info');
+
+  const tooltip = document.createElement('span');
+  tooltip.className = 'subtitle-support-tooltip';
+  tooltip.textContent = 'Not all videos or music sources provide subtitles. If none are available, no subtitle file will be downloaded.';
+
+  const openTip = () => wrap.classList.add('is-open');
+  const closeTip = () => wrap.classList.remove('is-open');
+
+  trigger.addEventListener('mouseenter', openTip);
+  trigger.addEventListener('mouseleave', closeTip);
+  trigger.addEventListener('focus', openTip);
+  trigger.addEventListener('blur', closeTip);
+  trigger.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeTip();
   });
 
-  document.addEventListener('click', (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest('.info-tip-wrap')) return;
-    closeAll();
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeAll();
-  });
-}
-
-function buildQueueKey(url, format, resolution, outputFolder, mp3Bitrate, downloadSubtitles) {
-  return `${url}::${format}::${resolution || ''}::${mp3Bitrate || ''}::${outputFolder}::${downloadSubtitles ? 'subs' : 'nosubs'}`;
-}
-
-function getFormatLabel(job) {
-  if (job.format === 'mp3') {
-    return `MP3 ${String(job.mp3Bitrate || '192')} kbps`;
-  }
-  return `MP4 ${job.resolution ? `${job.resolution}p` : ''}`.trim();
-}
-
-function getCompletedMetaLine(job, siteName) {
-  const site = siteName && siteName !== 'none' ? siteName : 'Unknown';
-  if (job.format === 'mp3') {
-    return `${site} • MP3 • ${String(job.mp3Bitrate || '192')} kbps`;
-  }
-  if (job.format === 'mp4') {
-    return `${site} • MP4 • ${job.resolution ? `${job.resolution}p` : 'Auto'}`;
-  }
-  return `${site} • ${(job.format || 'FILE').toUpperCase()}`;
-}
-
-function getSubtitleLabel(job) {
-  if (!job.downloadSubtitles) return '';
-  if (job.status === 'completed') return 'Subtitles: Downloaded';
-  if (job.status === 'downloading' || job.status === 'processing') return 'Subtitles: Downloading';
-  return 'Subtitles: Enabled';
-}
-
-function compactTitle(rawTitle, maxChars = 40) {
-  const text = String(rawTitle || '').replace(/\s+/g, ' ').trim();
-  if (!text) return '';
-  if (text.length <= maxChars) return text;
-  const slice = text.slice(0, maxChars + 1);
-  const cut = slice.lastIndexOf(' ');
-  const base = (cut > 24 ? slice.slice(0, cut) : text.slice(0, maxChars)).trim();
-  return `${base}...`;
-}
-
-function getCardTitle(job) {
-  if (job.title && String(job.title).trim()) return compactTitle(job.title);
-  if (job.status === 'queued' || job.status === 'fetching') return 'Preparing download...';
-  return '';
-}
-
-function getProgressPercentLabel(job, percent) {
-  if (job.status === 'downloading' || job.status === 'processing' || job.status === 'completed') {
-    return `${Math.round(percent)}%`;
-  }
-  return '';
-}
-
-function getFileSizeLabel(job) {
-  if (job.fileSize && String(job.fileSize).trim()) return String(job.fileSize).trim();
-  if (job.status === 'completed' || job.status === 'canceled') return '';
-  return '-';
-}
-
-function statusLabel(status) {
-  if (status === 'completed') return 'complete';
-  if (status === 'failed') return 'failed';
-  if (status === 'canceled') return 'canceled';
-  if (status === 'fetching') return 'fetching info...';
-  if (status === 'processing') return 'processing...';
-  return status;
-}
-
-function createNode(tag, className, text) {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  if (text !== undefined) element.textContent = text;
-  return element;
-}
-
-function detectSite(hostname) {
-  if (!hostname) return { name: 'none', iconSvg: null };
-  const h = hostname.toLowerCase();
-
-  if (h.includes('youtube') || h.includes('youtu.be')) {
-    return {
-      name: 'YouTube',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-    };
-  }
-  if (h.includes('tiktok')) {
-    return {
-      name: 'TikTok',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>',
-    };
-  }
-  if (h.includes('facebook') || h.includes('fb.')) {
-    return {
-      name: 'Facebook',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-    };
-  }
-  if (h.includes('twitter.com') || h.includes('x.com')) {
-    return {
-      name: 'Twitter/X',
-      iconSvg: '<svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M18.9 2H22l-6.77 7.74L23.2 22h-6.25l-4.89-7.06L5.9 22H2.8l7.23-8.26L.8 2h6.35l4.42 6.38L18.9 2zm-1.09 18h1.73L6.2 3.9H4.34L17.81 20z"/></svg>',
-    };
-  }
-  if (h.includes('instagram')) return { name: 'Instagram', iconSvg: null };
-  if (h.includes('reddit')) return { name: 'Reddit', iconSvg: null };
-  if (h.includes('twitch')) return { name: 'Twitch', iconSvg: null };
-  if (h.includes('vimeo')) return { name: 'Vimeo', iconSvg: null };
-  if (h.includes('dailymotion')) return { name: 'Dailymotion', iconSvg: null };
-  if (h.includes('soundcloud')) return { name: 'SoundCloud', iconSvg: null };
-  if (h.includes('bilibili')) return { name: 'Bilibili', iconSvg: null };
-
-  return { name: 'none', iconSvg: null };
-}
-
-/** Returns inline SVG string for a given hostname (site icon). */
-function getSiteIconSvg(hostname) {
-  const site = detectSite(hostname);
-  if (site.iconSvg) return site.iconSvg;
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
-}
-
-function setUrlError(message) {
-  if (commandBar) commandBar.classList.add('has-error');
-  if (urlErrorEl) {
-    urlErrorEl.textContent = message;
-    urlErrorEl.hidden = false;
-  }
-}
-
-function clearUrlError() {
-  if (commandBar) commandBar.classList.remove('has-error');
-  if (urlErrorEl) {
-    urlErrorEl.textContent = '';
-    urlErrorEl.hidden = true;
-  }
-}
-
-/** Show a toast notification (e.g. "Task Completed"). */
-function showToast(message, type = 'success') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-  const toast = createNode('div', `toast ${type}`);
-  toast.setAttribute('role', 'status');
-  toast.textContent = message;
-  container.appendChild(toast);
-  const duration = 3500;
-  setTimeout(() => {
-    toast.style.animation = 'toast-in 0.2s ease reverse forwards';
-    setTimeout(() => toast.remove(), 200);
-  }, duration);
-}
-
-function normalizedPercent(value) {
-  const safe = Number(value);
-  if (!Number.isFinite(safe)) return 0;
-  if (safe < 0) return 0;
-  if (safe > 100) return 100;
-  return safe;
+  wrap.appendChild(trigger);
+  wrap.appendChild(tooltip);
+  textEl.appendChild(wrap);
 }
 
 function stateForStorage(job) {
@@ -390,46 +288,14 @@ if (btnGithub) {
   });
 }
 
-function updateCommandBarClearVisibility() {
-  if (btnClearInput) btnClearInput.hidden = !urlInput.value.trim();
-}
-
-urlInput.addEventListener('input', () => {
-  clearUrlError();
-  updateCommandBarClearVisibility();
-});
-urlInput.addEventListener('focus', () => clearUrlError());
-
 // ── Sidebar view switching (fade-in + slide-up 300ms) ──
-const VIEW_IDS = ['view-home', 'view-downloads', 'view-settings', 'view-tools'];
-function switchView(viewId) {
-  VIEW_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (id === viewId) {
-      el.classList.remove('view-hidden');
-      el.classList.add('view-visible');
-    } else {
-      el.classList.remove('view-visible');
-      el.classList.add('view-hidden');
-    }
-  });
-  document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
-    const v = btn.getAttribute('data-view');
-    const targetId = 'view-' + v;
-    btn.classList.toggle('active', targetId === viewId);
-  });
-  if (viewId === 'view-downloads') renderDownloadsManager();
-  if (viewId === 'view-settings') loadSettingsForm();
-  if (viewId === 'view-tools') syncToolsEmptyState();
-}
-
-document.querySelectorAll('.sidebar-nav-item').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const view = btn.getAttribute('data-view');
-    if (view) switchView('view-' + view);
-  });
+const viewSwitcher = createViewSwitcher({
+  onDownloadsView: () => renderDownloadsManager(),
+  onSettingsView: () => void loadSettingsForm(),
+  onToolsView: () => syncToolsEmptyState(),
 });
+const switchView = viewSwitcher.switchView;
+viewSwitcher.bindSidebarNavigation();
 
 // ── Media Tools ──
 let toolsSelectedPaths = [];
@@ -1064,6 +930,8 @@ function renderDownloadsManager() {
 }
 
 function removeCompletedFromList(jobId) {
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
   queue = queue.filter((j) => j.id !== jobId);
   const card = document.getElementById('card-' + jobId);
   if (card) card.remove();
@@ -1074,6 +942,12 @@ function removeCompletedFromList(jobId) {
 }
 
 function clearDone() {
+  queue
+    .filter((job) => job.status === 'completed')
+    .forEach((job) => {
+      clearRateLimitRetry(job.id);
+      rateLimitRetryCounts.delete(job.id);
+    });
   queue = queue.filter((job) => job.status !== 'completed');
   rebuildQueue();
   renderDownloadsManager();
@@ -1081,6 +955,8 @@ function clearDone() {
 }
 
 function deleteJob(jobId) {
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
   queue = queue.filter((job) => job.id !== jobId);
   cardRefs.delete(jobId);
   rebuildQueue();
@@ -1399,6 +1275,7 @@ async function runDownload(job) {
   if (job.status !== 'queued') return;
   activeDownloads += 1;
   cancelRequested.delete(job.id);
+  clearRateLimitRetry(job.id);
 
   updateJob(job.id, { status: 'fetching', error: '' });
   try {
@@ -1459,6 +1336,20 @@ async function runDownload(job) {
     const rawMessage = (error && typeof error === 'object' && 'message' in error)
       ? error.message
       : String(error || '');
+    if (isRateLimitedError(rawMessage)) {
+      const attempt = (rateLimitRetryCounts.get(job.id) || 0) + 1;
+      rateLimitRetryCounts.set(job.id, attempt);
+      if (attempt <= MAX_RATE_LIMIT_RETRIES) {
+        scheduleRateLimitRetry(job.id, attempt);
+      } else {
+        updateJob(job.id, {
+          status: 'failed',
+          error: `Rate limited by site (HTTP 429). Retried ${MAX_RATE_LIMIT_RETRIES} times. Please wait a bit and try again.`,
+        });
+      }
+      return;
+    }
+    rateLimitRetryCounts.delete(job.id);
     updateJob(job.id, {
       status: 'failed',
       error: friendlyError(rawMessage),
@@ -1492,6 +1383,10 @@ function updateJob(id, changes) {
   const wasCompleted = job.status === 'completed';
 
   Object.assign(job, changes);
+  if (job.status === 'completed' || job.status === 'canceled') {
+    clearRateLimitRetry(job.id);
+    rateLimitRetryCounts.delete(job.id);
+  }
   if (!wasCompleted && job.status === 'completed' && job.openFolderWhenFinished && !autoOpenedFolders.has(job.id)) {
     autoOpenedFolders.add(job.id);
     void window.electronAPI.openFolder(job.outputFolder);
@@ -1671,6 +1566,8 @@ function refreshCard(job) {
 async function onCancel(jobId) {
   const job = queue.find((item) => item.id === jobId);
   if (!job) return;
+  clearRateLimitRetry(jobId);
+  rateLimitRetryCounts.delete(jobId);
 
   if (job.status === 'queued') {
     updateJob(jobId, {
@@ -1704,6 +1601,7 @@ function onRetry(jobId) {
   if (!job) return;
   if (!QUEUEABLE_STATUSES.has(job.status)) return;
 
+  clearRateLimitRetry(jobId);
   cancelRequested.delete(job.id);
   updateJob(job.id, {
     status: 'queued',
@@ -1726,50 +1624,15 @@ function syncEmptyState() {
   emptyState.hidden = queue.length !== 0;
 }
 
-function progressText(job) {
-  if (job.status === 'completed') return 'Complete';
-  if (job.status === 'failed') return 'Failed';
-  if (job.status === 'canceled') return 'Canceled';
-  if (job.status === 'fetching') return 'Fetching info...';
-  if (job.status === 'processing') return 'Processing...';
-  return `${normalizedPercent(job.percent).toFixed(1)}%`;
-}
-
-function trailingPercent(percent, status) {
-  if (status !== 'downloading') return '';
-  const safe = normalizedPercent(percent);
-  if (safe <= 0 || safe >= 100) return '';
-  return `${safe.toFixed(1)}%`;
-}
-
-function friendlyError(message) {
-  if (!message) return 'Unknown error occurred.';
-  const text = String(message);
-
-  if (text.includes('canceled')) return 'Download canceled by user.';
-  if (text.includes('Private video')) return 'This video is private.';
-  if (text.includes('unavailable')) return 'Video is unavailable or has been removed.';
-  if (text.includes('Sign in')) return 'This content requires login to access.';
-  if (text.includes('ETIMEDOUT')) return 'Connection timed out. Check your internet.';
-  if (text.includes('ENOTFOUND')) return 'Network error. Check your internet connection.';
-  if (text.includes('Unsupported URL')) return 'This URL or site is not supported.';
-  if (text.includes('timed out')) return 'Download timed out after 10 minutes.';
-  if (text.includes('429')) return 'Too many requests. Please wait and try again.';
-  if (text.includes('[Errno 22] Invalid argument')) {
-    return 'Windows rejected the generated file path/name. Try a shorter output folder path and retry.';
-  }
-  if (text.includes('Requested format is not available')) {
-    return 'Selected quality is unavailable for this video. Try a lower resolution.';
-  }
-  if (text.includes('cookies') || text.includes('login required')) {
-    return 'This content requires login/cookies to download.';
-  }
-  return text.slice(0, 240);
-}
+window.addEventListener('beforeunload', () => {
+  clearAllRateLimitRetries();
+});
 
 void restoreState().finally(() => {
   setOptionsCollapsed(isOptionsCollapsedStored(), false);
   initInfoTipPopovers();
+  initSubtitleSupportHint();
   saveState();
 });
+
 

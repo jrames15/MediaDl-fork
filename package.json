@@ -1,15 +1,23 @@
 {
   "name": "mediadl",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Multi-platform video and music downloader",
   "author": "kevclint",
   "type": "commonjs",
   "scripts": {
+    "frontend:dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "frontend:build": "vite build",
     "start": "tauri dev",
     "dev": "tauri dev",
     "build": "tauri build"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-react": "^5.1.4",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   }
 }

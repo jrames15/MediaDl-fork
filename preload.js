@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  getPlatform: () => ipcRenderer.invoke('get-platform'),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   getDownloadFolder: () => ipcRenderer.invoke('get-download-folder'),
   setDownloadFolder: (folderPath) => ipcRenderer.invoke('set-download-folder', folderPath),

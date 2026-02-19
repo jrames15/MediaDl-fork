@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; object-src 'none'; base-uri 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' http://ipc.localhost https://ipc.localhost ipc:; object-src 'none'; base-uri 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MediaDl</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -539,6 +539,9 @@
     </div>
   </div>
 
+  <script src="tauri-api.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
+
+

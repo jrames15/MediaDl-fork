@@ -150,8 +150,18 @@ function getSubtitleLabel(job) {
   return 'Subtitles: Enabled';
 }
 
+function compactTitle(rawTitle, maxChars = 40) {
+  const text = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.length <= maxChars) return text;
+  const slice = text.slice(0, maxChars + 1);
+  const cut = slice.lastIndexOf(' ');
+  const base = (cut > 24 ? slice.slice(0, cut) : text.slice(0, maxChars)).trim();
+  return `${base}...`;
+}
+
 function getCardTitle(job) {
-  if (job.title && String(job.title).trim()) return job.title;
+  if (job.title && String(job.title).trim()) return compactTitle(job.title);
   if (job.status === 'queued' || job.status === 'fetching') return 'Preparing download...';
   return '';
 }
@@ -1414,6 +1424,26 @@ async function runDownload(job) {
 
   updateJob(job.id, { status: 'downloading' });
   try {
+    const platform = (window.electronAPI && typeof window.electronAPI.getPlatform === 'function')
+      ? await window.electronAPI.getPlatform()
+      : (/win/i.test(String(navigator.platform || '')) ? 'win32' : 'unknown');
+    const MAX_PATH = platform === 'win32' ? 255 : 4096;
+    const separator = platform === 'win32' ? '\\' : '/';
+    const extension = job.format === 'mp3' ? '.mp3' : '.mp4';
+    let title = compactTitle(job.title || '');
+    let fullPath = job.outputFolder + separator + title + extension;
+    let maxChars = 40;
+
+    while (fullPath.length > MAX_PATH && maxChars > 10) {
+      maxChars -= 5;
+      title = compactTitle(job.title || '', maxChars);
+      fullPath = job.outputFolder + separator + title + extension;
+    }
+
+    if (fullPath.length > MAX_PATH) {
+        title = String(job.id);
+    }
+
     await window.electronAPI.startDownload({
       url: job.url,
       outputFolder: job.outputFolder,
@@ -1422,12 +1452,16 @@ async function runDownload(job) {
       mp3Bitrate: job.mp3Bitrate || null,
       openFolderWhenFinished: Boolean(job.openFolderWhenFinished),
       downloadSubtitles: Boolean(job.downloadSubtitles),
+      title: title,
       downloadId: job.id,
     });
   } catch (error) {
+    const rawMessage = (error && typeof error === 'object' && 'message' in error)
+      ? error.message
+      : String(error || '');
     updateJob(job.id, {
       status: 'failed',
-      error: friendlyError(error && error.message),
+      error: friendlyError(rawMessage),
     });
   } finally {
     activeDownloads = Math.max(0, activeDownloads - 1);
@@ -1437,12 +1471,17 @@ async function runDownload(job) {
 }
 
 window.electronAPI.onDownloadProgress((data) => {
+  const status = data.status;
   const updates = {
     percent: data.percent ?? 0,
     fileSize: data.fileSize ?? '',
-    status: data.status,
-    error: data.error ?? '',
+    status,
   };
+  if (typeof data.error === 'string' && data.error.trim()) {
+    updates.error = friendlyError(data.error);
+  } else if (status && status !== 'failed') {
+    updates.error = '';
+  }
   if (data.outputFilePath) updates.outputFilePath = data.outputFilePath;
   updateJob(data.downloadId, updates);
 });
@@ -1705,17 +1744,27 @@ function trailingPercent(percent, status) {
 
 function friendlyError(message) {
   if (!message) return 'Unknown error occurred.';
+  const text = String(message);
 
-  if (message.includes('canceled')) return 'Download canceled by user.';
-  if (message.includes('Private video')) return 'This video is private.';
-  if (message.includes('unavailable')) return 'Video is unavailable or has been removed.';
-  if (message.includes('Sign in')) return 'This content requires login to access.';
-  if (message.includes('ETIMEDOUT')) return 'Connection timed out. Check your internet.';
-  if (message.includes('ENOTFOUND')) return 'Network error. Check your internet connection.';
-  if (message.includes('Unsupported URL')) return 'This URL or site is not supported.';
-  if (message.includes('timed out')) return 'Download timed out after 10 minutes.';
-  if (message.includes('429')) return 'Too many requests. Please wait and try again.';
-  return 'Download failed. The video may be unavailable.';
+  if (text.includes('canceled')) return 'Download canceled by user.';
+  if (text.includes('Private video')) return 'This video is private.';
+  if (text.includes('unavailable')) return 'Video is unavailable or has been removed.';
+  if (text.includes('Sign in')) return 'This content requires login to access.';
+  if (text.includes('ETIMEDOUT')) return 'Connection timed out. Check your internet.';
+  if (text.includes('ENOTFOUND')) return 'Network error. Check your internet connection.';
+  if (text.includes('Unsupported URL')) return 'This URL or site is not supported.';
+  if (text.includes('timed out')) return 'Download timed out after 10 minutes.';
+  if (text.includes('429')) return 'Too many requests. Please wait and try again.';
+  if (text.includes('[Errno 22] Invalid argument')) {
+    return 'Windows rejected the generated file path/name. Try a shorter output folder path and retry.';
+  }
+  if (text.includes('Requested format is not available')) {
+    return 'Selected quality is unavailable for this video. Try a lower resolution.';
+  }
+  if (text.includes('cookies') || text.includes('login required')) {
+    return 'This content requires login/cookies to download.';
+  }
+  return text.slice(0, 240);
 }
 
 void restoreState().finally(() => {

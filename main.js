@@ -93,6 +93,7 @@ function validateDownloadInput(payload) {
     mp3Bitrate,
     openFolderWhenFinished,
     downloadSubtitles,
+    title,
     downloadId
   } = payload;
 
@@ -123,6 +124,9 @@ function validateDownloadInput(payload) {
   if (!Number.isInteger(downloadId) || downloadId < 1) {
     throw new Error('Invalid download ID.');
   }
+  if (title !== undefined && typeof title !== 'string') {
+    throw new Error('Invalid title.');
+  }
 
   return {
     url,
@@ -132,6 +136,7 @@ function validateDownloadInput(payload) {
     mp3Bitrate: format === 'mp3' ? String(mp3Bitrate || '192') : null,
     openFolderWhenFinished: Boolean(openFolderWhenFinished),
     downloadSubtitles: Boolean(downloadSubtitles),
+    title: String(title || ''),
     downloadId
   };
 }
@@ -148,6 +153,58 @@ function normalizeName(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+function buildSafeTitleStem(rawTitle, id, maxWords = 6, maxChars = 48) {
+  const words = String(rawTitle || '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+    .replace(/[^\x20-\x7E]+/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter(Boolean)
+    .slice(0, maxWords);
+
+  const limited = words.join(' ').slice(0, maxChars).trim();
+  const safe = limited
+    .replace(/[^A-Za-z0-9 _.-]+/g, ' ')
+    .replace(/\.+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!safe) return String(id);
+  return `${safe} [${id}]`;
+}
+
+function extractYtDlpError(stderrText, stdoutText) {
+  const lines = `${stderrText || ''}\n${stdoutText || ''}`
+    .split(/\r?\n/)
+    .map((line) => String(line || '').trim())
+    .filter(Boolean);
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    if (line.startsWith('ERROR:')) {
+      return line.replace(/^ERROR:\s*/i, '').trim() || 'Download failed. Check the URL or your connection.';
+    }
+  }
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const line = lines[i];
+    if (/error|forbidden|unavailable|private|timed out/i.test(line)) {
+      return line;
+    }
+  }
+
+  return 'Download failed. Check the URL or your connection.';
+}
+
+function isWindowsPathArgumentError(message) {
+  const text = String(message || '').toLowerCase();
+  if (!text) return false;
+  return text.includes('[errno 22] invalid argument')
+    || (text.includes('invalid argument') && text.includes('unable to download video'))
+    || (text.includes('invalid argument') && text.includes('stdout'));
 }
 
 function resolveOutputFilePath({ outputFolder, title, format }) {
@@ -243,6 +300,8 @@ function killProcessTree(proc) {
 
 app.whenReady().then(createWindow);
 
+ipcMain.handle('get-platform', () => process.platform);
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
@@ -303,8 +362,16 @@ ipcMain.handle('fetch-formats', async (event, url) => {
     const proc = spawn(ytdlp, [
       '--dump-json',
       '--no-playlist',
+      '--windows-filenames',
+      '--trim-filenames', '180',
+      '--encoding', 'utf-8',
       url
-    ]);
+    ], {
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8'
+      }
+    });
 
     let output = '';
     let errorOutput = '';
@@ -335,7 +402,7 @@ ipcMain.handle('fetch-formats', async (event, url) => {
 // ── Start download ──
 ipcMain.handle('start-download', async (
   event,
-  { url, outputFolder, format, resolution, mp3Bitrate, openFolderWhenFinished, downloadSubtitles, downloadId }
+  { url, outputFolder, format, resolution, mp3Bitrate, openFolderWhenFinished, downloadSubtitles, title, downloadId }
 ) => {
   return new Promise((resolve, reject) => {
     let safeInput;
@@ -348,6 +415,7 @@ ipcMain.handle('start-download', async (
         mp3Bitrate,
         openFolderWhenFinished,
         downloadSubtitles,
+        title,
         downloadId
       });
     } catch (error) {
@@ -364,131 +432,209 @@ ipcMain.handle('start-download', async (
       resolution: safeResolution,
       mp3Bitrate: safeMp3Bitrate,
       downloadSubtitles: safeDownloadSubtitles,
+      title: safeTitle,
       downloadId: safeDownloadId
     } = safeInput;
 
-    let args = [
-      '--ffmpeg-location', ffmpegDir,
-      '--newline',
-      '--no-playlist',
-      '-o', path.join(safeOutputFolder, '%(title)s.%(ext)s'),
-    ];
+    const buildArgs = (useIdOnlyTemplate) => {
+      let outputStem = useIdOnlyTemplate
+        ? String(safeDownloadId)
+        : buildSafeTitleStem(safeTitle, safeDownloadId, 6, 48);
+      const reservedTail = '.%(ext)s';
+      const maxPathLen = 230;
+      const availableStemChars = Math.max(12, maxPathLen - safeOutputFolder.length - 1 - reservedTail.length);
+      if (outputStem.length > availableStemChars) {
+        outputStem = outputStem.slice(0, availableStemChars).trim().replace(/[ .]+$/g, '');
+      }
+      if (!outputStem) outputStem = String(safeDownloadId);
+      const outputTemplate = path.join(safeOutputFolder, `${outputStem}${reservedTail}`);
 
-    if (safeFormat === 'mp3') {
-      args = args.concat([
-        '-x',
-        '--audio-format', 'mp3',
-        '--audio-quality', `${safeMp3Bitrate}K`
-      ]);
-    } else {
-      const heightFilter = `[height<=${safeResolution}]`;
-      args = args.concat([
-        '-f', `bestvideo${heightFilter}+bestaudio/best${heightFilter}/best`,
-        '--merge-output-format', 'mp4'
-      ]);
-    }
-    if (safeDownloadSubtitles) {
-      args = args.concat([
-        '--write-subs',
-        '--write-auto-subs',
-        '--sub-langs', 'en.*'
-      ]);
-    }
+      let args = [
+        '--ffmpeg-location', ffmpegDir,
+        '--newline',
+        '--no-playlist',
+        '--windows-filenames',
+        '--restrict-filenames',
+        '--trim-filenames', '180',
+        '--encoding', 'utf-8',
+        '-o', outputTemplate,
+      ];
 
-    args.push(safeUrl);
+      if (safeFormat === 'mp3') {
+        args = args.concat([
+          '-x',
+          '--audio-format', 'mp3',
+          '--audio-quality', `${safeMp3Bitrate}K`
+        ]);
+      } else {
+        const heightFilter = `[height<=${safeResolution}]`;
+        args = args.concat([
+          '-f', `bestvideo${heightFilter}+bestaudio/best${heightFilter}/best`,
+          '--merge-output-format', 'mp4'
+        ]);
+      }
+      if (safeDownloadSubtitles) {
+        args = args.concat([
+          '--write-subs',
+          '--write-auto-subs',
+          '--sub-langs', 'en.*'
+        ]);
+      }
+
+      args.push(safeUrl);
+      return args;
+    };
 
     if (runningDownloads.has(safeDownloadId)) {
       reject(new Error('Download is already running.'));
       return;
     }
+    let settled = false;
+    let attemptUsedIdOnlyTemplate = false;
 
-    const proc = spawn(ytdlp, args);
-    proc.cancelRequested = false;
-    runningDownloads.set(safeDownloadId, proc);
-
-    proc.on('error', () => {
+    const settle = (fn, value) => {
+      if (settled) return;
+      settled = true;
       runningDownloads.delete(safeDownloadId);
-      reject(new Error('Failed to start yt-dlp process'));
-    });
+      fn(value);
+    };
+    const runAttempt = (useIdOnlyTemplate) => {
+      if (settled) return;
+      attemptUsedIdOnlyTemplate = useIdOnlyTemplate;
 
-    const timeout = setTimeout(() => {
-      void killProcessTree(proc);
-      reject(new Error('Download timed out after 10 minutes'));
-    }, 10 * 60 * 1000);
-
-    proc.stdout.on('data', (data) => {
-      const lines = data.toString().split('\n');
-      lines.forEach(line => {
-        const match = line.match(/(\d+\.?\d*)%\s+of\s+~?\s*([\d.]+\s*\w+)/);
-        if (match) {
-          mainWindow.webContents.send('download-progress', {
-            downloadId: safeDownloadId,
-            percent: parseFloat(match[1]),
-            fileSize: match[2],
-            status: 'downloading'
-          });
-        }
-        if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
-          mainWindow.webContents.send('download-progress', {
-            downloadId: safeDownloadId,
-            percent: 99,
-            fileSize: '',
-            status: 'processing'
-          });
+      const proc = spawn(ytdlp, buildArgs(useIdOnlyTemplate), {
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8'
         }
       });
-    });
+      proc.cancelRequested = false;
+      runningDownloads.set(safeDownloadId, proc);
 
-    proc.stderr.on('data', (data) => {
-      console.error('[yt-dlp stderr]', data.toString());
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timeout);
-      runningDownloads.delete(safeDownloadId);
-
-      if (code === 0) {
-        let outputFilePath = '';
-        try {
-          const entries = fs.readdirSync(safeOutputFolder, { withFileTypes: true });
-          const media = entries
-            .filter((e) => e.isFile() && /\.(mp4|mp3|webm|mkv)$/i.test(e.name))
-            .map((e) => ({
-              name: e.name,
-              path: path.join(safeOutputFolder, e.name),
-              mtime: fs.statSync(path.join(safeOutputFolder, e.name)).mtimeMs
-            }));
-          media.sort((a, b) => b.mtime - a.mtime);
-          if (media.length > 0) outputFilePath = media[0].path;
-        } catch (_) {}
-        mainWindow.webContents.send('download-progress', {
-          downloadId: safeDownloadId,
-          percent: 100,
-          fileSize: '',
-          status: 'completed',
-          outputFilePath: outputFilePath || undefined
-        });
-        resolve({ success: true });
-      } else if (proc.cancelRequested) {
-        mainWindow.webContents.send('download-progress', {
-          downloadId: safeDownloadId,
-          percent: 0,
-          fileSize: '',
-          status: 'canceled',
-          error: 'Download canceled by user.'
-        });
-        resolve({ success: false, canceled: true });
-      } else {
+      let stderrOutput = '';
+      let stdoutTail = '';
+      const timeout = setTimeout(() => {
+        void killProcessTree(proc);
+        const message = 'Download timed out after 10 minutes';
         mainWindow.webContents.send('download-progress', {
           downloadId: safeDownloadId,
           percent: 0,
           fileSize: '',
           status: 'failed',
-          error: 'Download failed. Check the URL or your connection.'
+          error: message
         });
-        reject(new Error('yt-dlp exited with code ' + code));
-      }
-    });
+        settle(reject, new Error(message));
+      }, 10 * 60 * 1000);
+
+      proc.on('error', () => {
+        clearTimeout(timeout);
+        const message = 'Failed to start yt-dlp process';
+        mainWindow.webContents.send('download-progress', {
+          downloadId: safeDownloadId,
+          percent: 0,
+          fileSize: '',
+          status: 'failed',
+          error: message
+        });
+        settle(reject, new Error(message));
+      });
+
+      proc.stdout.on('data', (data) => {
+        stdoutTail = `${stdoutTail}${data.toString()}`.slice(-12000);
+        const lines = data.toString().split('\n');
+        lines.forEach(line => {
+          const match = line.match(/(\d+\.?\d*)%\s+of\s+~?\s*([\d.]+\s*\w+)/);
+          if (match) {
+            mainWindow.webContents.send('download-progress', {
+              downloadId: safeDownloadId,
+              percent: parseFloat(match[1]),
+              fileSize: match[2],
+              status: 'downloading'
+            });
+          }
+          if (line.includes('[Merger]') || line.includes('[ExtractAudio]')) {
+            mainWindow.webContents.send('download-progress', {
+              downloadId: safeDownloadId,
+              percent: 99,
+              fileSize: '',
+              status: 'processing'
+            });
+          }
+        });
+      });
+
+      proc.stderr.on('data', (data) => {
+        const chunk = data.toString();
+        stderrOutput = `${stderrOutput}${chunk}`.slice(-16000);
+        console.error('[yt-dlp stderr]', chunk);
+      });
+
+      proc.on('close', (code) => {
+        clearTimeout(timeout);
+        if (settled) return;
+
+        if (code === 0) {
+          let outputFilePath = '';
+          try {
+            const entries = fs.readdirSync(safeOutputFolder, { withFileTypes: true });
+            const media = entries
+              .filter((e) => e.isFile() && /\.(mp4|mp3|webm|mkv)$/i.test(e.name))
+              .map((e) => ({
+                name: e.name,
+                path: path.join(safeOutputFolder, e.name),
+                mtime: fs.statSync(path.join(safeOutputFolder, e.name)).mtimeMs
+              }));
+            media.sort((a, b) => b.mtime - a.mtime);
+            if (media.length > 0) outputFilePath = media[0].path;
+          } catch (_) {}
+          mainWindow.webContents.send('download-progress', {
+            downloadId: safeDownloadId,
+            percent: 100,
+            fileSize: '',
+            status: 'completed',
+            outputFilePath: outputFilePath || undefined
+          });
+          settle(resolve, { success: true });
+          return;
+        }
+
+        if (proc.cancelRequested) {
+          mainWindow.webContents.send('download-progress', {
+            downloadId: safeDownloadId,
+            percent: 0,
+            fileSize: '',
+            status: 'canceled',
+            error: 'Download canceled by user.'
+          });
+          settle(resolve, { success: false, canceled: true });
+          return;
+        }
+
+        const message = extractYtDlpError(stderrOutput, stdoutTail);
+        if (!attemptUsedIdOnlyTemplate && isWindowsPathArgumentError(message)) {
+          mainWindow.webContents.send('download-progress', {
+            downloadId: safeDownloadId,
+            percent: 0,
+            fileSize: '',
+            status: 'processing',
+            error: ''
+          });
+          runAttempt(true);
+          return;
+        }
+
+        mainWindow.webContents.send('download-progress', {
+          downloadId: safeDownloadId,
+          percent: 0,
+          fileSize: '',
+          status: 'failed',
+          error: message
+        });
+        settle(reject, new Error(message));
+      });
+    };
+
+    runAttempt(false);
   });
 });
 

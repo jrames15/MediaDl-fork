@@ -1,5 +1,5 @@
 node_modules/
 dist/
-tools/
 md/
-src-tauri/
+tools/_ffmpeg_extract/
+tools/*.zip
